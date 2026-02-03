@@ -82,7 +82,7 @@ Antes de começar, você precisa ter instalado em sua máquina:
 
 1. **Clone o repositório**
  ```bash
- git clone https://github.com/SEU_USUARIO/marketlist_mobile.git
+ git clone https://github.com/jhownny/marketlist_mobile.git
  cd marketlist_mobile
 
 ```
