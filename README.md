@@ -97,7 +97,7 @@ flutter pub get
 3. **Configure as Variáveis de Ambiente**
 Crie um arquivo chamado `.env` na raiz do projeto e adicione suas credenciais:
 ```env
-API_URL=[https://seusite.com.br/api.php](https://seusite.com.br/api.php)
+API_URL=[https://seusite.com.br/api.php]
 API_KEY=sua_chave_secreta_aqui
 
 ```
