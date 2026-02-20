@@ -42,15 +42,17 @@ class ListaComprasScreen extends StatefulWidget {
 
 class _ListaComprasScreenState extends State<ListaComprasScreen> {
   List<dynamic> _itens = [];
-  List<dynamic> _listaUsuariosApi = []; // Armazena os usuários vindos do banco
+  List<dynamic> _listaUsuariosApi = [];
+  List<dynamic> _listaGruposApi = []; // Armazena os grupos vindos do banco
+  
   bool _carregando = true;
   bool _modoOffline = false;
   String _erro = '';
 
-  String _usuarioId = '3'; // Valor inicial (até carregar ou selecionar outro)
-  String _nomeUsuarioAtual = 'Carregando...'; // Exibição visual
+  String _usuarioId = '3';
+  String _nomeUsuarioAtual = 'Carregando...';
   int _grupoId = 1; 
-  String _nomeGrupoAtual = 'Mercado'; 
+  String _nomeGrupoAtual = 'Carregando...';
 
   @override
   void initState() {
@@ -58,13 +60,13 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
     _inicializarDados();
   }
 
-  // Função para carregar usuários e depois os itens
+  // Sequência de inicialização para garantir que temos Usuário -> Grupos -> Itens
   Future<void> _inicializarDados() async {
     await _buscarUsuariosDaApi();
+    await _buscarGruposDaApi(); // Busca os grupos do usuário atual
     await buscarItens();
   }
 
-  // --- NOVA FUNÇÃO: BUSCAR USUÁRIOS DINAMICAMENTE ---
   Future<void> _buscarUsuariosDaApi() async {
     try {
       final baseUrl = dotenv.env['API_URL'] ?? '';
@@ -73,18 +75,13 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
       final url = Uri.parse('$baseUrl/usuarios');
       final response = await http.get(
         url,
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-        },
+        headers: {'Content-Type': 'application/json', 'x-api-key': apiKey},
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final dados = jsonDecode(response.body);
         setState(() {
           _listaUsuariosApi = dados is List ? dados : [];
-          
-          // Se a lista carregou, define o nome do usuário atual baseado no ID padrão
           if (_listaUsuariosApi.isNotEmpty) {
             final userMatch = _listaUsuariosApi.firstWhere(
               (u) => u['id'].toString() == _usuarioId, 
@@ -97,20 +94,58 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
       }
     } catch (e) {
       print("Erro ao buscar usuários da API: $e");
-      // Se der erro (ex: offline), deixamos a lista vazia e o app usa o ID padrão do cache
     }
   }
 
-  // --- FUNÇÃO DE MUDAR USUÁRIO ---
-  void _trocarUsuario(String novoId, String novoNome) {
+  // --- NOVA FUNÇÃO: BUSCAR GRUPOS DINAMICAMENTE ---
+  Future<void> _buscarGruposDaApi() async {
+    try {
+      final baseUrl = dotenv.env['API_URL'] ?? '';
+      final apiKey = dotenv.env['API_KEY'] ?? '';
+
+      // Busca apenas os grupos do usuário logado
+      final url = Uri.parse('$baseUrl/grupos?usuario_id=$_usuarioId');
+      final response = await http.get(
+        url,
+        headers: {'Content-Type': 'application/json', 'x-api-key': apiKey},
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final dados = jsonDecode(response.body);
+        setState(() {
+          _listaGruposApi = dados is List ? dados : [];
+          
+          // Se tiver grupos, seleciona automaticamente o primeiro
+          if (_listaGruposApi.isNotEmpty) {
+            _grupoId = int.parse(_listaGruposApi[0]['id'].toString());
+            _nomeGrupoAtual = _listaGruposApi[0]['nome'];
+          } else {
+            _grupoId = 0;
+            _nomeGrupoAtual = 'Sem Grupos';
+          }
+        });
+      }
+    } catch (e) {
+      print("Erro ao buscar grupos da API: $e");
+    }
+  }
+
+  void _trocarUsuario(String novoId, String novoNome) async {
     setState(() {
       _usuarioId = novoId;
       _nomeUsuarioAtual = novoNome;
+      _carregando = true;
     });
-    buscarItens(); // Recarrega a lista para o novo usuário
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Trocado para o usuário: $novoNome')),
-    );
+    
+   
+    await _buscarGruposDaApi();
+    await buscarItens();
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Trocado para o usuário: $novoNome')),
+      );
+    }
   }
 
   void _trocarGrupo(int novoId, String nome) {
@@ -118,11 +153,20 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
       _grupoId = novoId;
       _nomeGrupoAtual = nome;
     });
-    Navigator.pop(context); 
+    Navigator.pop(context); // Fecha o Drawer
     buscarItens(); 
   }
 
   Future<void> buscarItens() async {
+    if (_grupoId == 0) {
+      setState(() {
+        _itens = [];
+        _carregando = false;
+        _erro = 'Este usuário não possui grupos cadastrados.';
+      });
+      return;
+    }
+
     setState(() {
       _carregando = true;
       _erro = '';
@@ -136,18 +180,11 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
       final baseUrl = dotenv.env['API_URL'] ?? '';
       final apiKey = dotenv.env['API_KEY'] ?? '';
 
-      if (baseUrl.isEmpty || apiKey.isEmpty) {
-        throw Exception('Configuração do .env incompleta.');
-      }
-
       final url = Uri.parse('$baseUrl/itens?usuario_id=$_usuarioId&grupo_id=$_grupoId&status=pendente');
 
       final response = await http.get(
         url,
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-        },
+        headers: {'Content-Type': 'application/json', 'x-api-key': apiKey},
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
@@ -185,7 +222,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
   }
 
   Future<void> _salvarNovoItem(String nome, String preco) async {
-    if (nome.isEmpty || preco.isEmpty) return;
+    if (nome.isEmpty || preco.isEmpty || _grupoId == 0) return;
 
     final precoFormatado = preco.replaceAll(',', '.');
     final precoDouble = double.tryParse(precoFormatado) ?? 0.0;
@@ -207,10 +244,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/itens'),
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-        },
+        headers: {'Content-Type': 'application/json', 'x-api-key': apiKey},
         body: jsonEncode(novoItem),
       );
 
@@ -233,6 +267,87 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
         const SnackBar(content: Text('Erro ao salvar. Verifique sua conexão.'), backgroundColor: Colors.red),
       );
     }
+  }
+
+  // --- NOVA FUNÇÃO: FINALIZAR LISTA ---
+  Future<void> _finalizarLista() async {
+    // Pede confirmação antes de fechar a lista
+    bool? confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Finalizar Compras?'),
+        content: const Text('Todos os itens pendentes desta lista serão marcados como finalizados.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+            child: const Text('Finalizar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar != true) return;
+
+    final baseUrl = dotenv.env['API_URL'] ?? '';
+    final apiKey = dotenv.env['API_KEY'] ?? '';
+
+    final payload = {
+      "usuario_id": int.parse(_usuarioId),
+      "grupo_id": _grupoId
+    };
+
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/finalizar'),
+        headers: {'Content-Type': 'application/json', 'x-api-key': apiKey},
+        body: jsonEncode(payload),
+      );
+
+      final resultado = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        // Exibe o resumo igual ao bot do Telegram
+        final totalGasto = resultado['total_gasto']?.toString() ?? '0.00';
+        final itensFechados = resultado['itens_fechados'] ?? 0;
+
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('🛒 Lista Finalizada!', style: TextStyle(color: Colors.green)),
+            content: Text('📦 Itens fechados: $itensFechados\n💸 Total Gasto: R\$ $totalGasto'),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              )
+            ],
+          ),
+        );
+        buscarItens(); // Atualiza a tela
+      } else {
+        throw Exception(resultado['erro'] ?? 'Erro ao finalizar');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao finalizar lista: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  // Função auxiliar para somar os valores locais
+  double _calcularTotalParcial() {
+    double total = 0;
+    for (var item in _itens) {
+      if (item['status'] == 'pendente') {
+        total += double.tryParse(item['preco'].toString()) ?? 0.0;
+      }
+    }
+    return total;
   }
 
   void _exibirDialogoAdicionar() {
@@ -278,6 +393,9 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Verifica se existem itens pendentes para mostrar a barra inferior
+    final bool temItensPendentes = _itens.any((item) => item['status'] == 'pendente');
+
     return Scaffold(
       appBar: AppBar(
         title: Column(
@@ -285,7 +403,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
           children: [
             Row(
               children: [
-                Text('$_nomeGrupoAtual', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                Text(_nomeGrupoAtual, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 if (_modoOffline) ...[
                   const SizedBox(width: 8),
                   const Icon(Icons.cloud_off, size: 16, color: Colors.yellow),
@@ -298,21 +416,14 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
         backgroundColor: Colors.green,
         foregroundColor: Colors.white,
         actions: [
-          // Menu de Usuários (AGORA DINÂMICO)
           PopupMenuButton<Map<String, String>>(
             onSelected: (Map<String, String> userSelec) {
               _trocarUsuario(userSelec['id']!, userSelec['nome']!);
             },
             itemBuilder: (context) {
               if (_listaUsuariosApi.isEmpty) {
-                return [
-                  const PopupMenuItem(
-                    enabled: false,
-                    child: Text('Nenhum usuário encontrado'),
-                  )
-                ];
+                return [const PopupMenuItem(enabled: false, child: Text('Nenhum usuário'))];
               }
-              // Mapeia a lista recebida da API para itens do menu
               return _listaUsuariosApi.map<PopupMenuItem<Map<String, String>>>((user) {
                 return PopupMenuItem<Map<String, String>>(
                   value: {'id': user['id'].toString(), 'nome': user['nome']},
@@ -326,6 +437,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
             icon: const Icon(Icons.refresh),
             onPressed: () {
               _buscarUsuariosDaApi();
+              _buscarGruposDaApi();
               buscarItens();
             },
           )
@@ -347,27 +459,19 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                 ],
               ),
             ),
-            ListTile(
-              leading: const Icon(Icons.shopping_cart),
-              title: const Text('Mercado'),
-              selected: _grupoId == 1,
-              selectedColor: Colors.green,
-              onTap: () => _trocarGrupo(1, 'Mercado'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.outdoor_grill),
-              title: const Text('Churrasco'),
-              selected: _grupoId == 2,
-              selectedColor: Colors.green,
-              onTap: () => _trocarGrupo(2, 'Churrasco'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.home),
-              title: const Text('Casa'),
-              selected: _grupoId == 3,
-              selectedColor: Colors.green,
-              onTap: () => _trocarGrupo(3, 'Casa'),
-            ),
+            // Monta os grupos dinamicamente baseados na API
+            if (_listaGruposApi.isEmpty)
+              const ListTile(title: Text('Nenhum grupo encontrado.')),
+            ..._listaGruposApi.map((grupo) {
+              final idGrupo = int.parse(grupo['id'].toString());
+              return ListTile(
+                leading: const Icon(Icons.list_alt),
+                title: Text(grupo['nome']),
+                selected: _grupoId == idGrupo,
+                selectedColor: Colors.green,
+                onTap: () => _trocarGrupo(idGrupo, grupo['nome']),
+              );
+            }).toList(),
           ],
         ),
       ),
@@ -377,6 +481,35 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
         backgroundColor: Colors.green,
         child: const Icon(Icons.add, color: Colors.white),
       ),
+      // --- NOVA BARRA INFERIOR (TOTAL + FINALIZAR) ---
+      bottomNavigationBar: temItensPendentes && !_carregando
+          ? BottomAppBar(
+              color: Colors.white,
+              elevation: 10,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Total: R\$ ${_calcularTotalParcial().toStringAsFixed(2)}',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: _modoOffline ? null : _finalizarLista, // Desativa se estiver offline
+                      icon: const Icon(Icons.check_circle),
+                      label: const Text('Finalizar'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : null, // Esconde a barra se a lista estiver vazia ou carregando
     );
   }
 
