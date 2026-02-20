@@ -28,11 +28,203 @@ class MarketListApp extends StatelessWidget {
         primarySwatch: Colors.green,
         useMaterial3: true,
       ),
-      home: const ListaComprasScreen(),
+      // O app agora inicia no verificador de autenticação
+      home: const AuthCheck(),
     );
   }
 }
 
+// ==========================================================
+// 1. TELA DE VERIFICAÇÃO DE LOGIN (Splash Screen invisível)
+// ==========================================================
+class AuthCheck extends StatefulWidget {
+  const AuthCheck({super.key});
+
+  @override
+  State<AuthCheck> createState() => _AuthCheckState();
+}
+
+class _AuthCheckState extends State<AuthCheck> {
+  @override
+  void initState() {
+    super.initState();
+    _verificarLogin();
+  }
+
+  Future<void> _verificarLogin() async {
+    final prefs = await SharedPreferences.getInstance();
+    final usuarioId = prefs.getString('usuario_id');
+
+    // Se já tem um ID salvo, vai para a lista. Se não, vai para o Login.
+    if (usuarioId != null && usuarioId.isNotEmpty) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const ListaComprasScreen()),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      backgroundColor: Colors.green,
+      body: Center(
+        child: CircularProgressIndicator(color: Colors.white),
+      ),
+    );
+  }
+}
+
+// ==========================================================
+// 2. TELA DE LOGIN REAL
+// ==========================================================
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _senhaController = TextEditingController();
+  bool _carregando = false;
+
+  Future<void> _fazerLogin() async {
+    final email = _emailController.text.trim();
+    final senha = _senhaController.text.trim();
+
+    if (email.isEmpty || senha.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Preencha e-mail e senha!')),
+      );
+      return;
+    }
+
+    setState(() => _carregando = true);
+
+    try {
+      final baseUrl = dotenv.env['API_URL'] ?? '';
+      final apiKey = dotenv.env['API_KEY'] ?? '';
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/login'),
+        headers: {'Content-Type': 'application/json', 'x-api-key': apiKey},
+        body: jsonEncode({
+          "email": email,
+          "senha": senha,
+        }),
+      ).timeout(const Duration(seconds: 10));
+
+      final resultado = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && resultado['status'] == 'logado') {
+        // LOGIN COM SUCESSO: Salva os dados no cofre do celular
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('usuario_id', resultado['id'].toString());
+        await prefs.setString('usuario_nome', resultado['nome'].toString());
+
+        if (!mounted) return;
+        
+        // Vai para a tela principal
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const ListaComprasScreen()),
+        );
+      } else {
+        // SENHA ERRADA OU USUÁRIO NÃO ENCONTRADO
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(resultado['erro'] ?? 'E-mail ou senha inválidos'), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Erro de conexão. Tente novamente.'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _carregando = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey[100],
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.shopping_basket, size: 100, color: Colors.green),
+              const SizedBox(height: 20),
+              const Text(
+                'MarketList',
+                style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.green),
+              ),
+              const SizedBox(height: 40),
+              Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Column(
+                    children: [
+                      TextField(
+                        controller: _emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(
+                          labelText: 'E-mail',
+                          prefixIcon: Icon(Icons.email),
+                        ),
+                      ),
+                      const SizedBox(height: 15),
+                      TextField(
+                        controller: _senhaController,
+                        obscureText: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Senha',
+                          prefixIcon: Icon(Icons.lock),
+                        ),
+                      ),
+                      const SizedBox(height: 30),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: _carregando ? null : _fazerLogin,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          child: _carregando
+                              ? const CircularProgressIndicator(color: Colors.white)
+                              : const Text('Entrar', style: TextStyle(fontSize: 18)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ==========================================================
+// 3. TELA PRINCIPAL (LISTA DE COMPRAS)
+// ==========================================================
 class ListaComprasScreen extends StatefulWidget {
   const ListaComprasScreen({super.key});
 
@@ -42,68 +234,54 @@ class ListaComprasScreen extends StatefulWidget {
 
 class _ListaComprasScreenState extends State<ListaComprasScreen> {
   List<dynamic> _itens = [];
-  List<dynamic> _listaUsuariosApi = [];
-  List<dynamic> _listaGruposApi = []; // Armazena os grupos vindos do banco
+  List<dynamic> _listaGruposApi = []; 
   
   bool _carregando = true;
   bool _modoOffline = false;
   String _erro = '';
 
-  String _usuarioId = '3';
-  String _nomeUsuarioAtual = 'Carregando...';
-  int _grupoId = 1; 
+  String _usuarioId = '';
+  String _nomeUsuarioAtual = '';
+  int _grupoId = 0; 
   String _nomeGrupoAtual = 'Carregando...';
 
   @override
   void initState() {
     super.initState();
-    _inicializarDados();
+    _carregarUsuarioLocal();
   }
 
-  // Sequência de inicialização para garantir que temos Usuário -> Grupos -> Itens
-  Future<void> _inicializarDados() async {
-    await _buscarUsuariosDaApi();
-    await _buscarGruposDaApi(); // Busca os grupos do usuário atual
-    await buscarItens();
-  }
+  // Busca quem está logado direto da memória do celular
+  Future<void> _carregarUsuarioLocal() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _usuarioId = prefs.getString('usuario_id') ?? '';
+      _nomeUsuarioAtual = prefs.getString('usuario_nome') ?? 'Usuário';
+    });
 
-  Future<void> _buscarUsuariosDaApi() async {
-    try {
-      final baseUrl = dotenv.env['API_URL'] ?? '';
-      final apiKey = dotenv.env['API_KEY'] ?? '';
-
-      final url = Uri.parse('$baseUrl/usuarios');
-      final response = await http.get(
-        url,
-        headers: {'Content-Type': 'application/json', 'x-api-key': apiKey},
-      ).timeout(const Duration(seconds: 10));
-
-      if (response.statusCode == 200) {
-        final dados = jsonDecode(response.body);
-        setState(() {
-          _listaUsuariosApi = dados is List ? dados : [];
-          if (_listaUsuariosApi.isNotEmpty) {
-            final userMatch = _listaUsuariosApi.firstWhere(
-              (u) => u['id'].toString() == _usuarioId, 
-              orElse: () => _listaUsuariosApi[0]
-            );
-            _usuarioId = userMatch['id'].toString();
-            _nomeUsuarioAtual = userMatch['nome'];
-          }
-        });
-      }
-    } catch (e) {
-      print("Erro ao buscar usuários da API: $e");
+    if (_usuarioId.isNotEmpty) {
+      await _buscarGruposDaApi();
+      await buscarItens();
     }
   }
 
-  // --- NOVA FUNÇÃO: BUSCAR GRUPOS DINAMICAMENTE ---
+  // Função de LOGOUT
+  Future<void> _fazerLogout() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear(); // Limpa todos os dados salvos (ID, Nome, Cache offline)
+    
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
+    );
+  }
+
   Future<void> _buscarGruposDaApi() async {
     try {
       final baseUrl = dotenv.env['API_URL'] ?? '';
       final apiKey = dotenv.env['API_KEY'] ?? '';
 
-      // Busca apenas os grupos do usuário logado
       final url = Uri.parse('$baseUrl/grupos?usuario_id=$_usuarioId');
       final response = await http.get(
         url,
@@ -115,7 +293,6 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
         setState(() {
           _listaGruposApi = dados is List ? dados : [];
           
-          // Se tiver grupos, seleciona automaticamente o primeiro
           if (_listaGruposApi.isNotEmpty) {
             _grupoId = int.parse(_listaGruposApi[0]['id'].toString());
             _nomeGrupoAtual = _listaGruposApi[0]['nome'];
@@ -130,30 +307,12 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
     }
   }
 
-  void _trocarUsuario(String novoId, String novoNome) async {
-    setState(() {
-      _usuarioId = novoId;
-      _nomeUsuarioAtual = novoNome;
-      _carregando = true;
-    });
-    
-   
-    await _buscarGruposDaApi();
-    await buscarItens();
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Trocado para o usuário: $novoNome')),
-      );
-    }
-  }
-
   void _trocarGrupo(int novoId, String nome) {
     setState(() {
       _grupoId = novoId;
       _nomeGrupoAtual = nome;
     });
-    Navigator.pop(context); // Fecha o Drawer
+    Navigator.pop(context); 
     buscarItens(); 
   }
 
@@ -162,7 +321,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
       setState(() {
         _itens = [];
         _carregando = false;
-        _erro = 'Este usuário não possui grupos cadastrados.';
+        _erro = 'Você não possui grupos cadastrados.';
       });
       return;
     }
@@ -253,9 +412,6 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
       if (response.statusCode == 200 || response.statusCode == 201) {
         if (resultado is Map && resultado['status'] == 'item adicionado') {
           buscarItens();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Item adicionado com sucesso!'), backgroundColor: Colors.green),
-          );
         } else {
           throw Exception(resultado['erro'] ?? 'Erro desconhecido');
         }
@@ -264,14 +420,12 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Erro ao salvar. Verifique sua conexão.'), backgroundColor: Colors.red),
+        const SnackBar(content: Text('Erro ao salvar.'), backgroundColor: Colors.red),
       );
     }
   }
 
-  // --- NOVA FUNÇÃO: FINALIZAR LISTA ---
   Future<void> _finalizarLista() async {
-    // Pede confirmação antes de fechar a lista
     bool? confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -311,7 +465,6 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
       final resultado = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
-        // Exibe o resumo igual ao bot do Telegram
         final totalGasto = resultado['total_gasto']?.toString() ?? '0.00';
         final itensFechados = resultado['itens_fechados'] ?? 0;
 
@@ -321,25 +474,21 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
             title: const Text('🛒 Lista Finalizada!', style: TextStyle(color: Colors.green)),
             content: Text('📦 Itens fechados: $itensFechados\n💸 Total Gasto: R\$ $totalGasto'),
             actions: [
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK'),
-              )
+              ElevatedButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))
             ],
           ),
         );
-        buscarItens(); // Atualiza a tela
+        buscarItens();
       } else {
         throw Exception(resultado['erro'] ?? 'Erro ao finalizar');
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao finalizar lista: $e'), backgroundColor: Colors.red),
+        SnackBar(content: Text('Erro ao finalizar: $e'), backgroundColor: Colors.red),
       );
     }
   }
 
-  // Função auxiliar para somar os valores locais
   double _calcularTotalParcial() {
     double total = 0;
     for (var item in _itens) {
@@ -393,7 +542,6 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Verifica se existem itens pendentes para mostrar a barra inferior
     final bool temItensPendentes = _itens.any((item) => item['status'] == 'pendente');
 
     return Scaffold(
@@ -410,33 +558,15 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                 ]
               ],
             ),
-            Text('Usuário: $_nomeUsuarioAtual', style: const TextStyle(fontSize: 12, color: Colors.white70)),
+            Text('Olá, $_nomeUsuarioAtual', style: const TextStyle(fontSize: 12, color: Colors.white70)),
           ],
         ),
         backgroundColor: Colors.green,
         foregroundColor: Colors.white,
         actions: [
-          PopupMenuButton<Map<String, String>>(
-            onSelected: (Map<String, String> userSelec) {
-              _trocarUsuario(userSelec['id']!, userSelec['nome']!);
-            },
-            itemBuilder: (context) {
-              if (_listaUsuariosApi.isEmpty) {
-                return [const PopupMenuItem(enabled: false, child: Text('Nenhum usuário'))];
-              }
-              return _listaUsuariosApi.map<PopupMenuItem<Map<String, String>>>((user) {
-                return PopupMenuItem<Map<String, String>>(
-                  value: {'id': user['id'].toString(), 'nome': user['nome']},
-                  child: Text(user['nome']),
-                );
-              }).toList();
-            },
-            icon: const Icon(Icons.people_alt),
-          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () {
-              _buscarUsuariosDaApi();
               _buscarGruposDaApi();
               buscarItens();
             },
@@ -444,34 +574,44 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
         ],
       ),
       drawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
+        child: Column(
           children: [
-            const DrawerHeader(
-              decoration: BoxDecoration(color: Colors.green),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.end,
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.zero,
                 children: [
-                  Icon(Icons.shopping_basket, color: Colors.white, size: 40),
-                  SizedBox(height: 10),
-                  Text('Minhas Listas', style: TextStyle(color: Colors.white, fontSize: 24)),
+                  UserAccountsDrawerHeader(
+                    decoration: const BoxDecoration(color: Colors.green),
+                    accountName: Text(_nomeUsuarioAtual, style: const TextStyle(fontSize: 18)),
+                    accountEmail: const Text('MarketList User'),
+                    currentAccountPicture: const CircleAvatar(
+                      backgroundColor: Colors.white,
+                      child: Icon(Icons.person, color: Colors.green, size: 40),
+                    ),
+                  ),
+                  if (_listaGruposApi.isEmpty)
+                    const ListTile(title: Text('Nenhum grupo encontrado.')),
+                  ..._listaGruposApi.map((grupo) {
+                    final idGrupo = int.parse(grupo['id'].toString());
+                    return ListTile(
+                      leading: const Icon(Icons.list_alt),
+                      title: Text(grupo['nome']),
+                      selected: _grupoId == idGrupo,
+                      selectedColor: Colors.green,
+                      onTap: () => _trocarGrupo(idGrupo, grupo['nome']),
+                    );
+                  }),
                 ],
               ),
             ),
-            // Monta os grupos dinamicamente baseados na API
-            if (_listaGruposApi.isEmpty)
-              const ListTile(title: Text('Nenhum grupo encontrado.')),
-            ..._listaGruposApi.map((grupo) {
-              final idGrupo = int.parse(grupo['id'].toString());
-              return ListTile(
-                leading: const Icon(Icons.list_alt),
-                title: Text(grupo['nome']),
-                selected: _grupoId == idGrupo,
-                selectedColor: Colors.green,
-                onTap: () => _trocarGrupo(idGrupo, grupo['nome']),
-              );
-            }).toList(),
+            // Botão Sair no final do Menu
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.exit_to_app, color: Colors.red),
+              title: const Text('Sair', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+              onTap: _fazerLogout,
+            ),
+            const SizedBox(height: 10),
           ],
         ),
       ),
@@ -481,7 +621,6 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
         backgroundColor: Colors.green,
         child: const Icon(Icons.add, color: Colors.white),
       ),
-      // --- NOVA BARRA INFERIOR (TOTAL + FINALIZAR) ---
       bottomNavigationBar: temItensPendentes && !_carregando
           ? BottomAppBar(
               color: Colors.white,
@@ -496,7 +635,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
                     ),
                     ElevatedButton.icon(
-                      onPressed: _modoOffline ? null : _finalizarLista, // Desativa se estiver offline
+                      onPressed: _modoOffline ? null : _finalizarLista,
                       icon: const Icon(Icons.check_circle),
                       label: const Text('Finalizar'),
                       style: ElevatedButton.styleFrom(
@@ -509,7 +648,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                 ),
               ),
             )
-          : null, // Esconde a barra se a lista estiver vazia ou carregando
+          : null,
     );
   }
 
