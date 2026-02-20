@@ -1,18 +1,16 @@
 import 'package:flutter/material.dart';
-import 'dart:convert'; // Para converter o JSON
-import 'package:http/http.dart' as http; // Para fazer as requisições
-import 'package:flutter_dotenv/flutter_dotenv.dart'; // Para ler o arquivo .env
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> main() async {
-  // Garante que o Flutter esteja inicializado antes de carregar configurações
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Carrega as variáveis de ambiente do arquivo .env
   try {
     await dotenv.load(fileName: ".env");
   } catch (e) {
-    print("Erro ao carregar .env: $e"); 
-    
+    print("Erro ao carregar .env: $e");
   }
 
   runApp(const MarketListApp());
@@ -44,107 +42,349 @@ class ListaComprasScreen extends StatefulWidget {
 
 class _ListaComprasScreenState extends State<ListaComprasScreen> {
   List<dynamic> _itens = [];
+  List<dynamic> _listaUsuariosApi = []; // Armazena os usuários vindos do banco
   bool _carregando = true;
+  bool _modoOffline = false;
   String _erro = '';
+
+  String _usuarioId = '3'; // Valor inicial (até carregar ou selecionar outro)
+  String _nomeUsuarioAtual = 'Carregando...'; // Exibição visual
+  int _grupoId = 1; 
+  String _nomeGrupoAtual = 'Mercado'; 
 
   @override
   void initState() {
     super.initState();
-    buscarItens();
+    _inicializarDados();
   }
 
-  // Função responsável por conectar API PHP
-  Future<void> buscarItens() async {
-    setState(() {
-      _carregando = true;
-      _erro = '';
-    });
+  // Função para carregar usuários e depois os itens
+  Future<void> _inicializarDados() async {
+    await _buscarUsuariosDaApi();
+    await buscarItens();
+  }
 
+  // --- NOVA FUNÇÃO: BUSCAR USUÁRIOS DINAMICAMENTE ---
+  Future<void> _buscarUsuariosDaApi() async {
     try {
-      // Recupera as configurações do .env
       final baseUrl = dotenv.env['API_URL'] ?? '';
       final apiKey = dotenv.env['API_KEY'] ?? '';
-      
-      // ID fixo para teste (criar uma lógica de login depois)
-      const String usuarioId = '3'; 
 
-      // Validação simples para evitar crash se o .env estiver vazio
-      if (baseUrl.isEmpty || apiKey.isEmpty) {
-        throw Exception('Configuração do .env incompleta (API_URL ou API_KEY faltando).');
-      }
-
-      final url = Uri.parse('$baseUrl/itens?usuario_id=$usuarioId');
-
-      print('Buscando dados em: $url'); // Log para ajudar no debug
-
-      // Requisição GET
+      final url = Uri.parse('$baseUrl/usuarios');
       final response = await http.get(
         url,
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': apiKey, // Envia a chave segura no cabeçalho
+          'x-api-key': apiKey,
         },
-      );
+      ).timeout(const Duration(seconds: 10));
 
-      // 4. Verifica a resposta
       if (response.statusCode == 200) {
         final dados = jsonDecode(response.body);
-        
         setState(() {
-          _itens = dados;
-          _carregando = false;
-        });
-      } else {
-        // Erro vindo do servidor (ex: 403 Acesso Negado, 500 Erro PHP)
-        setState(() {
-          _erro = 'Erro do Servidor (${response.statusCode}):\n${response.body}';
-          _carregando = false;
+          _listaUsuariosApi = dados is List ? dados : [];
+          
+          // Se a lista carregou, define o nome do usuário atual baseado no ID padrão
+          if (_listaUsuariosApi.isNotEmpty) {
+            final userMatch = _listaUsuariosApi.firstWhere(
+              (u) => u['id'].toString() == _usuarioId, 
+              orElse: () => _listaUsuariosApi[0]
+            );
+            _usuarioId = userMatch['id'].toString();
+            _nomeUsuarioAtual = userMatch['nome'];
+          }
         });
       }
     } catch (e) {
-      // Erro de conexão (sem internet, URL errada e etc...)
-      setState(() {
-        _erro = 'Falha na conexão:\n$e';
-        _carregando = false;
-      });
+      print("Erro ao buscar usuários da API: $e");
+      // Se der erro (ex: offline), deixamos a lista vazia e o app usa o ID padrão do cache
     }
+  }
+
+  // --- FUNÇÃO DE MUDAR USUÁRIO ---
+  void _trocarUsuario(String novoId, String novoNome) {
+    setState(() {
+      _usuarioId = novoId;
+      _nomeUsuarioAtual = novoNome;
+    });
+    buscarItens(); // Recarrega a lista para o novo usuário
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Trocado para o usuário: $novoNome')),
+    );
+  }
+
+  void _trocarGrupo(int novoId, String nome) {
+    setState(() {
+      _grupoId = novoId;
+      _nomeGrupoAtual = nome;
+    });
+    Navigator.pop(context); 
+    buscarItens(); 
+  }
+
+  Future<void> buscarItens() async {
+    setState(() {
+      _carregando = true;
+      _erro = '';
+      _modoOffline = false;
+    });
+
+    final prefs = await SharedPreferences.getInstance();
+    final cacheKey = 'lista_cache_${_usuarioId}_$_grupoId';
+
+    try {
+      final baseUrl = dotenv.env['API_URL'] ?? '';
+      final apiKey = dotenv.env['API_KEY'] ?? '';
+
+      if (baseUrl.isEmpty || apiKey.isEmpty) {
+        throw Exception('Configuração do .env incompleta.');
+      }
+
+      final url = Uri.parse('$baseUrl/itens?usuario_id=$_usuarioId&grupo_id=$_grupoId&status=pendente');
+
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final dados = jsonDecode(response.body);
+
+        if (dados is Map && dados.containsKey('erro')) {
+          throw Exception(dados['erro']);
+        }
+
+        await prefs.setString(cacheKey, response.body);
+
+        setState(() {
+          _itens = dados is List ? dados : [];
+          _carregando = false;
+        });
+      } else {
+        throw Exception('Erro do Servidor (${response.statusCode})');
+      }
+    } catch (e) {
+      final dadosEmCache = prefs.getString(cacheKey);
+
+      if (dadosEmCache != null) {
+        setState(() {
+          _itens = jsonDecode(dadosEmCache);
+          _modoOffline = true;
+          _carregando = false;
+        });
+      } else {
+        setState(() {
+          _erro = 'Falha na conexão e sem dados no cache.\n$e';
+          _carregando = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _salvarNovoItem(String nome, String preco) async {
+    if (nome.isEmpty || preco.isEmpty) return;
+
+    final precoFormatado = preco.replaceAll(',', '.');
+    final precoDouble = double.tryParse(precoFormatado) ?? 0.0;
+
+    final novoItem = {
+      "usuario_id": int.parse(_usuarioId),
+      "grupo_id": _grupoId,
+      "produto": nome,
+      "preco": precoDouble
+    };
+
+    final baseUrl = dotenv.env['API_URL'] ?? '';
+    final apiKey = dotenv.env['API_KEY'] ?? '';
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Salvando item...'), duration: Duration(seconds: 1)),
+    );
+
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/itens'),
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+        },
+        body: jsonEncode(novoItem),
+      );
+
+      final resultado = jsonDecode(response.body);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        if (resultado is Map && resultado['status'] == 'item adicionado') {
+          buscarItens();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Item adicionado com sucesso!'), backgroundColor: Colors.green),
+          );
+        } else {
+          throw Exception(resultado['erro'] ?? 'Erro desconhecido');
+        }
+      } else {
+        throw Exception('Erro ${response.statusCode}');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Erro ao salvar. Verifique sua conexão.'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  void _exibirDialogoAdicionar() {
+    final TextEditingController nomeController = TextEditingController();
+    final TextEditingController precoController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Novo Item'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nomeController,
+              decoration: const InputDecoration(labelText: 'Produto (Ex: Arroz)'),
+              textCapitalization: TextCapitalization.sentences,
+            ),
+            TextField(
+              controller: precoController,
+              decoration: const InputDecoration(labelText: 'Preço Total (Ex: 20.50)'),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _salvarNovoItem(nomeController.text, precoController.text);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+            child: const Text('Adicionar'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('MarketList Mobile'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text('$_nomeGrupoAtual', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                if (_modoOffline) ...[
+                  const SizedBox(width: 8),
+                  const Icon(Icons.cloud_off, size: 16, color: Colors.yellow),
+                ]
+              ],
+            ),
+            Text('Usuário: $_nomeUsuarioAtual', style: const TextStyle(fontSize: 12, color: Colors.white70)),
+          ],
+        ),
         backgroundColor: Colors.green,
         foregroundColor: Colors.white,
         actions: [
+          // Menu de Usuários (AGORA DINÂMICO)
+          PopupMenuButton<Map<String, String>>(
+            onSelected: (Map<String, String> userSelec) {
+              _trocarUsuario(userSelec['id']!, userSelec['nome']!);
+            },
+            itemBuilder: (context) {
+              if (_listaUsuariosApi.isEmpty) {
+                return [
+                  const PopupMenuItem(
+                    enabled: false,
+                    child: Text('Nenhum usuário encontrado'),
+                  )
+                ];
+              }
+              // Mapeia a lista recebida da API para itens do menu
+              return _listaUsuariosApi.map<PopupMenuItem<Map<String, String>>>((user) {
+                return PopupMenuItem<Map<String, String>>(
+                  value: {'id': user['id'].toString(), 'nome': user['nome']},
+                  child: Text(user['nome']),
+                );
+              }).toList();
+            },
+            icon: const Icon(Icons.people_alt),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: buscarItens, // Botão para recarregar a lista
+            onPressed: () {
+              _buscarUsuariosDaApi();
+              buscarItens();
+            },
           )
         ],
       ),
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            const DrawerHeader(
+              decoration: BoxDecoration(color: Colors.green),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Icon(Icons.shopping_basket, color: Colors.white, size: 40),
+                  SizedBox(height: 10),
+                  Text('Minhas Listas', style: TextStyle(color: Colors.white, fontSize: 24)),
+                ],
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.shopping_cart),
+              title: const Text('Mercado'),
+              selected: _grupoId == 1,
+              selectedColor: Colors.green,
+              onTap: () => _trocarGrupo(1, 'Mercado'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.outdoor_grill),
+              title: const Text('Churrasco'),
+              selected: _grupoId == 2,
+              selectedColor: Colors.green,
+              onTap: () => _trocarGrupo(2, 'Churrasco'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.home),
+              title: const Text('Casa'),
+              selected: _grupoId == 3,
+              selectedColor: Colors.green,
+              onTap: () => _trocarGrupo(3, 'Casa'),
+            ),
+          ],
+        ),
+      ),
       body: _buildBody(),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-             const SnackBar(content: Text('Adicionar item: Em breve!'))
-          );
-        },
+        onPressed: _exibirDialogoAdicionar,
         backgroundColor: Colors.green,
         child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
 
-  // Função auxiliar para decidir o que mostrar na tela
   Widget _buildBody() {
-    // Estado 1: Carregando
     if (_carregando) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    // Estado 2: Erro
     if (_erro.isNotEmpty) {
       return Center(
         child: Padding(
@@ -171,7 +411,6 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
       );
     }
 
-    // Estado 3: Lista Vazia
     if (_itens.isEmpty) {
       return Center(
         child: Column(
@@ -180,7 +419,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
             Icon(Icons.shopping_basket_outlined, size: 80, color: Colors.grey[300]),
             const SizedBox(height: 10),
             Text(
-              'Sua lista está vazia!',
+              'A lista "$_nomeGrupoAtual" está vazia!',
               style: TextStyle(color: Colors.grey[600], fontSize: 18),
             ),
           ],
@@ -188,14 +427,12 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
       );
     }
 
-    // Estado 4: Lista com Itens
     return ListView.builder(
       itemCount: _itens.length,
       padding: const EdgeInsets.all(8),
       itemBuilder: (context, index) {
         final item = _itens[index];
         
-        // Mapeamento seguro dos dados (evita erro se vier null do PHP)
         final nomeProduto = item['produto'] ?? 'Produto sem nome';
         final preco = double.tryParse(item['preco'].toString()) ?? 0.0;
         final status = item['status'] ?? 'pendente';
@@ -234,9 +471,6 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                 fontSize: 16,
               ),
             ),
-            onTap: () {
-              print('Item clicado: ID ${item['id']}');
-            },
           ),
         );
       },
