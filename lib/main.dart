@@ -161,11 +161,10 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.shopping_basket, size: 100, color: Colors.green),
-              const SizedBox(height: 20),
-              const Text(
-                'MarketList',
-                style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.green),
+              Image.asset(
+                'assets/Text-MarketList-logo2.png',
+                height: 220,
+                fit: BoxFit.contain,
               ),
               const SizedBox(height: 40),
               Card(
