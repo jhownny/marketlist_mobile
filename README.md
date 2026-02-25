@@ -1,7 +1,9 @@
 
 <div align="center">
 
-  # 🛒 MarketList Mobile
+  <p align="center"> <img src="./assets/Text-MarketList-logo2_Red-GitHub.png" alt="LOOGO MARKETLIST" width="256"> </p>
+
+  <!--# 🛒 MarketList Mobile-->
   
   **Sua lista de compras inteligente, integrada e em tempo real.**
   
