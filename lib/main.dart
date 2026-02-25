@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -243,6 +245,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
   void initState() {
     super.initState();
     _carregarUsuarioLocal();
+    _verificarAtualizacao();
   }
 
   Future<void> _carregarUsuarioLocal() async {
@@ -825,6 +828,72 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
               ),
             )
           : null,
+    );
+  }
+
+  // ==========================================================
+  // SISTEMA DE ATUALIZAÇÃO AUTOMÁTICA
+  // ==========================================================
+  Future<void> _verificarAtualizacao() async {
+    try {
+      final baseUrl = dotenv.env['API_URL'] ?? '';
+      
+      // 1. Consulta a API para saber qual é a última versão
+      final response = await http.get(Uri.parse('$baseUrl/atualizacao'));
+
+      if (response.statusCode == 200) {
+        final dados = jsonDecode(response.body);
+        final buildNuvem = int.tryParse(dados['build_numero'].toString()) ?? 0;
+        final urlApk = dados['url_apk'];
+        final versaoNuvem = dados['versao_nome'];
+
+        // 2. Lê a versão instalada atualmente no celular
+        PackageInfo packageInfo = await PackageInfo.fromPlatform();
+        final buildApp = int.tryParse(packageInfo.buildNumber) ?? 0;
+
+        // 3. Compara: Se a nuvem for maior, mostra o aviso!
+        if (buildNuvem > buildApp) {
+          _mostrarAlertaAtualizacao(versaoNuvem, urlApk);
+        }
+      }
+    } catch (e) {
+      print("Erro ao verificar atualização: $e");
+    }
+  }
+
+  void _mostrarAlertaAtualizacao(String versao, String url) {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // Impede de fechar clicando fora
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.system_update, color: Colors.green),
+            SizedBox(width: 10),
+            Text('Nova Versão!'),
+          ],
+        ),
+        content: Text('A versão $versao do MarketList acabou de sair.\nDeseja baixar a atualização agora?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context), // Botão "Depois" fecha o alerta
+            child: const Text('Depois', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context); // Fecha o alerta
+              final uri = Uri.parse(url);
+              
+              // Abre o navegador padrão do celular para baixar o APK
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+            child: const Text('Atualizar'),
+          ),
+        ],
+      ),
     );
   }
 
