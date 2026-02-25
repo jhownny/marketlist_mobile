@@ -49,8 +49,8 @@ O objetivo é oferecer uma experiência nativa, rápida e fluida, mantendo a int
 - [x] **Visualização Clara:** Listagem de produtos com preços, quantidades e status.
 - [x] **Indicadores Visuais:** Diferenciação clara entre itens pendentes e comprados (check/riscado).
 - [x] **Segurança:** Comunicação via API Key (Header `x-api-key`) e HTTPS.
-- [ ] **Modo Offline:** (Em breve) Cache local para ver a lista sem internet.
-- [ ] **Gestão de Grupos:** (Em breve) Alternar entre diferentes listas de compras.
+- [x] **Modo Offline:** (Em breve) Cache local para ver a lista sem internet.
+- [x] **Gestão de Grupos:** (Em breve) Alternar entre diferentes listas de compras.
 
 ---
 <div id="tecnologias"></div>
