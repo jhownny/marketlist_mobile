@@ -28,7 +28,6 @@ class MarketListApp extends StatelessWidget {
         primarySwatch: Colors.green,
         useMaterial3: true,
       ),
-      // O app agora inicia no verificador de autenticação
       home: const AuthCheck(),
     );
   }
@@ -55,7 +54,6 @@ class _AuthCheckState extends State<AuthCheck> {
     final prefs = await SharedPreferences.getInstance();
     final usuarioId = prefs.getString('usuario_id');
 
-    // Se já tem um ID salvo, vai para a lista. Se não, vai para o Login.
     if (usuarioId != null && usuarioId.isNotEmpty) {
       Navigator.pushReplacement(
         context,
@@ -124,20 +122,17 @@ class _LoginScreenState extends State<LoginScreen> {
       final resultado = jsonDecode(response.body);
 
       if (response.statusCode == 200 && resultado['status'] == 'logado') {
-        // LOGIN COM SUCESSO: Salva os dados no cofre do celular
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('usuario_id', resultado['id'].toString());
         await prefs.setString('usuario_nome', resultado['nome'].toString());
 
         if (!mounted) return;
         
-        // Vai para a tela principal
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const ListaComprasScreen()),
         );
       } else {
-        // SENHA ERRADA OU USUÁRIO NÃO ENCONTRADO
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(resultado['erro'] ?? 'E-mail ou senha inválidos'), backgroundColor: Colors.red),
         );
@@ -250,7 +245,6 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
     _carregarUsuarioLocal();
   }
 
-  // Busca quem está logado direto da memória do celular
   Future<void> _carregarUsuarioLocal() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -264,10 +258,9 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
     }
   }
 
-  // Função de LOGOUT
   Future<void> _fazerLogout() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.clear(); // Limpa todos os dados salvos (ID, Nome, Cache offline)
+    await prefs.clear(); 
     
     if (!mounted) return;
     Navigator.pushReplacement(
@@ -379,17 +372,25 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
     }
   }
 
-  Future<void> _salvarNovoItem(String nome, String preco) async {
-    if (nome.isEmpty || preco.isEmpty || _grupoId == 0) return;
+  Future<void> _salvarNovoItem(String nomeDigitado, String precoDigitado, String qtdDigitada) async {
+    if (nomeDigitado.isEmpty || precoDigitado.isEmpty || _grupoId == 0) return;
 
-    final precoFormatado = preco.replaceAll(',', '.');
-    final precoDouble = double.tryParse(precoFormatado) ?? 0.0;
+    final precoFormatado = precoDigitado.replaceAll(',', '.');
+    final precoUnitario = double.tryParse(precoFormatado) ?? 0.0;
+    final quantidade = int.tryParse(qtdDigitada) ?? 1;
+
+    final precoTotalCalculado = precoUnitario * quantidade;
+    String nomeFinal = nomeDigitado;
+    
+    if (quantidade > 1) {
+      nomeFinal = "$nomeDigitado (${quantidade}x)";
+    }
 
     final novoItem = {
       "usuario_id": int.parse(_usuarioId),
       "grupo_id": _grupoId,
-      "produto": nome,
-      "preco": precoDouble
+      "produto": nomeFinal,
+      "preco": precoTotalCalculado
     };
 
     final baseUrl = dotenv.env['API_URL'] ?? '';
@@ -420,6 +421,165 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Erro ao salvar.'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  // ==========================================================
+  // FUNÇÕES DE SWIPE: EDITAR E DELETAR
+  // ==========================================================
+  Future<bool> _confirmarExclusao(Map item) async {
+    bool? confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Excluir Item?'),
+        content: Text('Tem certeza que deseja remover "${item['produto']}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            child: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar == true) {
+      return await _deletarItemDaApi(item['id']);
+    }
+    return false;
+  }
+
+  Future<bool> _deletarItemDaApi(dynamic itemId) async {
+    if (itemId == null) return false;
+    
+    final baseUrl = dotenv.env['API_URL'] ?? '';
+    final apiKey = dotenv.env['API_KEY'] ?? '';
+
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/itens?id=$itemId'),
+        headers: {'Content-Type': 'application/json', 'x-api-key': apiKey},
+      );
+
+      if (response.statusCode == 200) {
+        buscarItens();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Erro ao excluir item.'), backgroundColor: Colors.red),
+      );
+      return false;
+    }
+  }
+
+  void _exibirDialogoEditar(Map item) {
+    final TextEditingController nomeController = TextEditingController(text: item['produto']);
+    final TextEditingController precoController = TextEditingController(text: item['preco'].toString());
+    final TextEditingController qtdController = TextEditingController(text: '1'); 
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Editar Item'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nomeController,
+              decoration: const InputDecoration(labelText: 'Produto'),
+              textCapitalization: TextCapitalization.sentences,
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: TextField(
+                    controller: precoController,
+                    decoration: const InputDecoration(labelText: 'Preço Unitário (R\$)'),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 1,
+                  child: TextField(
+                    controller: qtdController,
+                    decoration: const InputDecoration(labelText: 'Qtd'),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // Agora enviamos os 3 campos para a função de salvar a edição
+              _salvarEdicaoNaApi(item['id'], nomeController.text, precoController.text, qtdController.text);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
+            child: const Text('Atualizar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _salvarEdicaoNaApi(dynamic itemId, String nome, String preco, String qtd) async {
+    if (itemId == null || nome.isEmpty || preco.isEmpty) return;
+
+    // 1. Tratamento do Preço Unitário
+    final precoFormatado = preco.replaceAll(',', '.');
+    final precoUnitario = double.tryParse(precoFormatado) ?? 0.0;
+    
+    // 2. Tratamento da Quantidade
+    final quantidade = int.tryParse(qtd) ?? 1;
+
+    // 3. Aplica a mesma matemática da criação
+    final precoTotalCalculado = precoUnitario * quantidade;
+    String nomeFinal = nome;
+    
+    if (quantidade > 1) {
+      nomeFinal = "$nome (${quantidade}x)";
+    }
+
+    final baseUrl = dotenv.env['API_URL'] ?? '';
+    final apiKey = dotenv.env['API_KEY'] ?? '';
+
+    // Monta o pacote de dados atualizado
+    final payload = {
+      "id": itemId,
+      "produto": nomeFinal,
+      "preco": precoTotalCalculado
+    };
+
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/itens'),
+        headers: {'Content-Type': 'application/json', 'x-api-key': apiKey},
+        body: jsonEncode(payload),
+      );
+
+      if (response.statusCode == 200) {
+        buscarItens();
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Erro ao atualizar item.'), backgroundColor: Colors.red),
       );
     }
   }
@@ -501,6 +661,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
   void _exibirDialogoAdicionar() {
     final TextEditingController nomeController = TextEditingController();
     final TextEditingController precoController = TextEditingController();
+    final TextEditingController qtdController = TextEditingController(text: '1'); 
 
     showDialog(
       context: context,
@@ -514,10 +675,27 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
               decoration: const InputDecoration(labelText: 'Produto (Ex: Arroz)'),
               textCapitalization: TextCapitalization.sentences,
             ),
-            TextField(
-              controller: precoController,
-              decoration: const InputDecoration(labelText: 'Preço Total (Ex: 20.50)'),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: TextField(
+                    controller: precoController,
+                    decoration: const InputDecoration(labelText: 'Preço Unitário (R\$)'),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 1,
+                  child: TextField(
+                    controller: qtdController,
+                    decoration: const InputDecoration(labelText: 'Qtd'),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -529,7 +707,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
-              _salvarNovoItem(nomeController.text, precoController.text);
+              _salvarNovoItem(nomeController.text, precoController.text, qtdController.text);
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
             child: const Text('Adicionar'),
@@ -603,7 +781,6 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                 ],
               ),
             ),
-            // Botão Sair no final do Menu
             const Divider(),
             ListTile(
               leading: const Icon(Icons.exit_to_app, color: Colors.red),
@@ -709,37 +886,66 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
         final status = item['status'] ?? 'pendente';
         final isFinalizado = status == 'finalizado';
 
-        return Card(
-          elevation: 2,
-          color: isFinalizado ? Colors.grey[100] : Colors.white,
-          margin: const EdgeInsets.symmetric(vertical: 5),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: isFinalizado ? Colors.grey : Colors.green,
-              child: Icon(
-                isFinalizado ? Icons.check : Icons.shopping_cart,
-                color: Colors.white,
-                size: 20,
+        return Dismissible(
+          key: ValueKey(item['id'] ?? UniqueKey().toString()), 
+          direction: isFinalizado ? DismissDirection.none : DismissDirection.horizontal,
+          
+          background: Container(
+            color: Colors.blue,
+            alignment: Alignment.centerLeft,
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: const Icon(Icons.edit, color: Colors.white, size: 30),
+          ),
+          
+          secondaryBackground: Container(
+            color: Colors.red,
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: const Icon(Icons.delete, color: Colors.white, size: 30),
+          ),
+          
+          confirmDismiss: (direction) async {
+            if (direction == DismissDirection.startToEnd) {
+              _exibirDialogoEditar(item);
+              return false; 
+            } else if (direction == DismissDirection.endToStart) {
+              return await _confirmarExclusao(item); 
+            }
+            return false;
+          },
+          
+          child: Card(
+            elevation: 2,
+            color: isFinalizado ? Colors.grey[100] : Colors.white,
+            margin: const EdgeInsets.symmetric(vertical: 5),
+            child: ListTile(
+              leading: CircleAvatar(
+                backgroundColor: isFinalizado ? Colors.grey : Colors.green,
+                child: Icon(
+                  isFinalizado ? Icons.check : Icons.shopping_cart,
+                  color: Colors.white,
+                  size: 20,
+                ),
               ),
-            ),
-            title: Text(
-              nomeProduto,
-              style: TextStyle(
-                decoration: isFinalizado ? TextDecoration.lineThrough : null,
-                color: isFinalizado ? Colors.grey : Colors.black87,
-                fontWeight: FontWeight.bold,
+              title: Text(
+                nomeProduto,
+                style: TextStyle(
+                  decoration: isFinalizado ? TextDecoration.lineThrough : null,
+                  color: isFinalizado ? Colors.grey : Colors.black87,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-            subtitle: Text(
-              'Status: ${status.toUpperCase()}',
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-            ),
-            trailing: Text(
-              'R\$ ${preco.toStringAsFixed(2)}',
-              style: TextStyle(
-                color: isFinalizado ? Colors.grey : Colors.green[800],
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
+              subtitle: Text(
+                'Status: ${status.toUpperCase()}',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+              trailing: Text(
+                'R\$ ${preco.toStringAsFixed(2)}',
+                style: TextStyle(
+                  color: isFinalizado ? Colors.grey : Colors.green[800],
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
               ),
             ),
           ),
