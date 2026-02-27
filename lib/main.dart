@@ -330,6 +330,16 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
     final prefs = await SharedPreferences.getInstance();
     final cacheKey = 'lista_cache_${_usuarioId}_$_grupoId';
 
+    // Lê a fila offline atual para não esconder os itens da tela
+    final String filaString = prefs.getString('fila_offline_$_usuarioId') ?? '[]';
+    List<dynamic> fila = jsonDecode(filaString);
+    List<dynamic> filaVisual = fila.map((item) => {
+      "id": "temp_${item['produto']}",
+      "produto": item['produto'],
+      "preco": item['preco'],
+      "status": "aguardando_sync"
+    }).toList();
+
     try {
       final baseUrl = dotenv.env['API_URL'] ?? '';
       final apiKey = dotenv.env['API_KEY'] ?? '';
@@ -350,8 +360,11 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
 
         await prefs.setString(cacheKey, response.body);
 
+        List<dynamic> itensFinais = dados is List ? dados : [];
+        itensFinais.addAll(filaVisual); // Junta os itens do banco e os itens travados na fila
+
         setState(() {
-          _itens = dados is List ? dados : [];
+          _itens = itensFinais;
           _carregando = false;
         });
       } else {
@@ -361,14 +374,19 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
       final dadosEmCache = prefs.getString(cacheKey);
 
       if (dadosEmCache != null) {
+        List<dynamic> itensFinais = jsonDecode(dadosEmCache);
+        itensFinais.addAll(filaVisual); // Junta o cache com a fila
+
         setState(() {
-          _itens = jsonDecode(dadosEmCache);
+          _itens = itensFinais;
           _modoOffline = true;
           _carregando = false;
         });
       } else {
         setState(() {
-          _erro = 'Falha na conexão e sem dados no cache.\n$e';
+          _itens = filaVisual; // Mostra pelo menos a fila na tela
+          _erro = filaVisual.isEmpty ? 'Falha na conexão e sem dados no cache.\n$e' : '';
+          _modoOffline = true;
           _carregando = false;
         });
       }
@@ -396,34 +414,91 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
       "preco": precoTotalCalculado
     };
 
+    // tela provisoriamente
+    setState(() {
+      _itens.add({
+        "id": "temp_${DateTime.now().millisecondsSinceEpoch}",
+        "produto": nomeFinal,
+        "preco": precoTotalCalculado,
+        "status": "aguardando_sync"
+      });
+    });
+
     final baseUrl = dotenv.env['API_URL'] ?? '';
     final apiKey = dotenv.env['API_KEY'] ?? '';
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Salvando item...'), duration: Duration(seconds: 1)),
-    );
 
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/itens'),
         headers: {'Content-Type': 'application/json', 'x-api-key': apiKey},
         body: jsonEncode(novoItem),
-      );
-
-      final resultado = jsonDecode(response.body);
+      ).timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        if (resultado is Map && resultado['status'] == 'item adicionado') {
-          buscarItens();
-        } else {
-          throw Exception(resultado['erro'] ?? 'Erro desconhecido');
-        }
+        // Tenta enviar a fila travada antes de recarregar a tela
+        await _sincronizarFilaOffline(); 
+        buscarItens(); 
       } else {
-        throw Exception('Erro ${response.statusCode}');
+        throw Exception('Erro na resposta da API');
       }
     } catch (e) {
+      // Guarda na fila offline
+      final prefs = await SharedPreferences.getInstance();
+      final String filaString = prefs.getString('fila_offline_$_usuarioId') ?? '[]';
+      List<dynamic> fila = jsonDecode(filaString);
+      
+      fila.add(novoItem);
+      await prefs.setString('fila_offline_$_usuarioId', jsonEncode(fila));
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Erro ao salvar.'), backgroundColor: Colors.red),
+        const SnackBar(content: Text('Sem internet. Item salvo na fila!'), backgroundColor: Colors.orange),
+      );
+    }
+  }
+
+  // ==========================================================
+  // LÓGICA OFFLINE: SINCRONIZAÇÃO E FILA
+  // ==========================================================
+  Future<void> _sincronizarFilaOffline() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String filaString = prefs.getString('fila_offline_$_usuarioId') ?? '[]';
+    
+    List<dynamic> fila = jsonDecode(filaString);
+    if (fila.isEmpty) return; // Nada para sincronizar
+
+    final baseUrl = dotenv.env['API_URL'] ?? '';
+    final apiKey = dotenv.env['API_KEY'] ?? '';
+
+    List<dynamic> itensQueFalharam = [];
+    bool sincronizouAlgo = false;
+
+    // Tenta enviar cada item da fila para o servidor
+    for (var item in fila) {
+      try {
+        final response = await http.post(
+          Uri.parse('$baseUrl/itens'),
+          headers: {'Content-Type': 'application/json', 'x-api-key': apiKey},
+          body: jsonEncode(item),
+        ).timeout(const Duration(seconds: 5));
+
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          sincronizouAlgo = true; // Sucesso! O item foi pro MySQL
+        } else {
+          itensQueFalharam.add(item); // API deu erro, mantém na fila
+        }
+      } catch (e) {
+        itensQueFalharam.add(item); // Sem internet, mantém na fila
+      }
+    }
+
+    // Atualiza a gaveta offline apenas com os que falharam
+    await prefs.setString('fila_offline_$_usuarioId', jsonEncode(itensQueFalharam));
+
+    // Se pelo menos um item subiu, recarregamos a lista oficial
+    if (sincronizouAlgo) {
+      buscarItens();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Itens offline sincronizados!'), backgroundColor: Colors.blue),
       );
     }
   }
@@ -531,7 +606,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
-              // Agora enviamos os 3 campos para a função de salvar a edição
+              // Agora envia os 3 campos para a função de salvar a edição
               _salvarEdicaoNaApi(item['id'], nomeController.text, precoController.text, qtdController.text);
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
@@ -748,7 +823,8 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
             icon: const Icon(Icons.refresh),
             onPressed: () {
               _buscarGruposDaApi();
-              buscarItens();
+              _sincronizarFilaOffline(); // Tenta enviar os pendentes
+              buscarItens(); // Puxa os novos
             },
           )
         ],
@@ -953,11 +1029,16 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
         final nomeProduto = item['produto'] ?? 'Produto sem nome';
         final preco = double.tryParse(item['preco'].toString()) ?? 0.0;
         final status = item['status'] ?? 'pendente';
+        
+        // 3 variáveis de estado
         final isFinalizado = status == 'finalizado';
+        final isAguardando = status == 'aguardando_sync'; // O status da fila offline
 
         return Dismissible(
           key: ValueKey(item['id'] ?? UniqueKey().toString()), 
-          direction: isFinalizado ? DismissDirection.none : DismissDirection.horizontal,
+          
+          // BLOQUEIO DE SEGURANÇA: Não deixa arrastar se estiver fechado OU se estiver sem internet (laranja)
+          direction: (isFinalizado || isAguardando) ? DismissDirection.none : DismissDirection.horizontal,
           
           background: Container(
             color: Colors.blue,
@@ -984,14 +1065,26 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
           },
           
           child: Card(
-            elevation: 2,
-            color: isFinalizado ? Colors.grey[100] : Colors.white,
+            elevation: isAguardando ? 0 : 2, // Tira a sombra se estiver offline
+            // Fundo: Cinza (fechado) | Laranja bem clarinho (offline) | Branco (normal)
+            color: isFinalizado ? Colors.grey[100] : (isAguardando ? Colors.orange[50] : Colors.white),
             margin: const EdgeInsets.symmetric(vertical: 5),
+            
+            // Borda laranja se estiver offline
+            shape: isAguardando 
+              ? RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  side: BorderSide(color: Colors.orange.shade300, width: 1),
+                )
+              : RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              
             child: ListTile(
               leading: CircleAvatar(
-                backgroundColor: isFinalizado ? Colors.grey : Colors.green,
+                // Cor da bolinha: Cinza (fechado) | Laranja (offline) | Verde (normal)
+                backgroundColor: isFinalizado ? Colors.grey : (isAguardando ? Colors.orange : Colors.green),
                 child: Icon(
-                  isFinalizado ? Icons.check : Icons.shopping_cart,
+                  // Ícone: Check (fechado) | Relógio (offline) | Carrinho (normal)
+                  isFinalizado ? Icons.check : (isAguardando ? Icons.access_time : Icons.shopping_cart),
                   color: Colors.white,
                   size: 20,
                 ),
@@ -1000,18 +1093,23 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                 nomeProduto,
                 style: TextStyle(
                   decoration: isFinalizado ? TextDecoration.lineThrough : null,
-                  color: isFinalizado ? Colors.grey : Colors.black87,
+                  // Cor do texto
+                  color: isFinalizado ? Colors.grey : (isAguardando ? Colors.orange[900] : Colors.black87),
                   fontWeight: FontWeight.bold,
                 ),
               ),
               subtitle: Text(
-                'Status: ${status.toUpperCase()}',
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                isAguardando ? 'Aguardando rede...' : 'Status: ${status.toUpperCase()}',
+                style: TextStyle(
+                  fontSize: 12, 
+                  color: isAguardando ? Colors.orange[800] : Colors.grey[600],
+                  fontStyle: isAguardando ? FontStyle.italic : FontStyle.normal,
+                ),
               ),
               trailing: Text(
                 'R\$ ${preco.toStringAsFixed(2)}',
                 style: TextStyle(
-                  color: isFinalizado ? Colors.grey : Colors.green[800],
+                  color: isFinalizado ? Colors.grey : (isAguardando ? Colors.orange[900] : Colors.green[800]),
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
                 ),
