@@ -51,8 +51,8 @@ O objetivo é oferecer uma experiência nativa, rápida e fluida, mantendo a int
 - [x] **Segurança:** Comunicação via API Key (Header `x-api-key`) e HTTPS.
 - [x] **Modo Offline:** Cache local para ver a lista sem internet.
 - [ ] **Gestão de Grupos:** (Em breve) Alternar e editar diferentes listas de compras.
-- [ ] **Histórico de Listas** (Em berve) manter um histórico de listas anteriores para comparação.
-- [ ] **Verificação de Email** (Em berve) Mandar um codigo de verificação para confirmar a existencia do email.
+- [ ] **Histórico de Listas:** (Em breve) manter um histórico de listas anteriores para comparação.
+- [ ] **Verificação de Email:** (Em breve) Mandar um codigo de verificação para confirmar a existencia do email.
 
 ---
 <div id="tecnologias"></div>
