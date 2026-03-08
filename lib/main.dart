@@ -369,8 +369,211 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
       _grupoId = novoId;
       _nomeGrupoAtual = nome;
     });
-    Navigator.pop(context); 
     buscarItens(); 
+  }
+
+  // ==========================================================
+  // FUNÇÕES PARA CRIAR NOVO GRUPO
+  // ==========================================================
+  void _exibirDialogoNovoGrupo() {
+    final nomeController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Novo Grupo de Compras'),
+        content: TextField(
+          controller: nomeController,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(
+            labelText: 'Nome do Grupo',
+            hintText: 'Ex: Churrasco, Mês, Festa...',
+            prefixIcon: Icon(Icons.shopping_bag),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context), 
+            child: const Text('Cancelar', style: TextStyle(color: Colors.grey))
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _criarNovoGrupoNaApi(nomeController.text.trim());
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+            child: const Text('Criar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _criarNovoGrupoNaApi(String nome) async {
+    if (nome.isEmpty) return;
+
+    setState(() => _carregando = true);
+
+    try {
+      final baseUrl = dotenv.env['API_URL'] ?? '';
+      
+      final response = await http.post(
+        Uri.parse('$baseUrl/grupos'),
+        headers: _headersAuth(), // Envia o crachá JWT de segurança!
+        body: jsonEncode({
+          "nome": nome,
+          "icone": "shopping_cart" // Ícone padrão para novos grupos
+        }),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 201) {
+        final dados = jsonDecode(response.body);
+        final novoId = int.tryParse(dados['id'].toString()) ?? 0;
+
+        // Atualiza a lista de grupos do menu lateral
+        await _buscarGruposDaApi();
+
+        // Muda automaticamente a tela para o grupo que acabou de ser criado
+        if (novoId > 0) {
+          _trocarGrupo(novoId, nome);
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Grupo criado com sucesso!'), backgroundColor: Colors.green),
+        );
+      } else {
+        throw Exception('Erro da API');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Erro ao criar grupo. Verifique a conexão.'), backgroundColor: Colors.red),
+      );
+      setState(() => _carregando = false);
+    }
+  }
+
+  // ==========================================================
+  // FUNÇÕES PARA EDITAR E DELETAR GRUPOS
+  // ==========================================================
+  void _exibirOpcoesGrupo(int idGrupo, String nomeAtual) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text('Opções do Grupo', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit, color: Colors.blue),
+              title: const Text('Editar Nome'),
+              onTap: () {
+                Navigator.pop(context); // Fecha o menu inferior
+                _exibirDialogoEditarGrupo(idGrupo, nomeAtual);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete, color: Colors.red),
+              title: const Text('Excluir Grupo'),
+              subtitle: const Text('Isso apagará todos os itens dentro dele!'),
+              onTap: () {
+                Navigator.pop(context); // Fecha o menu inferior
+                _confirmarExclusaoGrupo(idGrupo, nomeAtual);
+              },
+            ),
+            const SizedBox(height: 10),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _exibirDialogoEditarGrupo(int idGrupo, String nomeAtual) {
+    final nomeController = TextEditingController(text: nomeAtual);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Editar Grupo'),
+        content: TextField(
+          controller: nomeController,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(labelText: 'Novo nome'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _editarGrupoNaApi(idGrupo, nomeController.text.trim());
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
+            child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _editarGrupoNaApi(int id, String novoNome) async {
+    if (novoNome.isEmpty) return;
+    try {
+      final baseUrl = dotenv.env['API_URL'] ?? '';
+      final response = await http.put(
+        Uri.parse('$baseUrl/grupos'),
+        headers: _headersAuth(),
+        body: jsonEncode({"id": id, "nome": novoNome}),
+      );
+      if (response.statusCode == 200) {
+        if (_grupoId == id) setState(() => _nomeGrupoAtual = novoNome);
+        await _buscarGruposDaApi();
+      }
+    } catch (e) {
+      print("Erro ao editar grupo: $e");
+    }
+  }
+
+  Future<void> _confirmarExclusaoGrupo(int idGrupo, String nome) async {
+    bool? confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Excluir Grupo?', style: TextStyle(color: Colors.red)),
+        content: Text('Tem certeza que deseja excluir o grupo "$nome"?\n\nTODOS os itens dentro dele serão perdidos para sempre!'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            child: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar == true) {
+      try {
+        final baseUrl = dotenv.env['API_URL'] ?? '';
+        final response = await http.delete(
+          Uri.parse('$baseUrl/grupos?id=$idGrupo'),
+          headers: _headersAuth(),
+        );
+        if (response.statusCode == 200) {
+          await _buscarGruposDaApi();
+          // Se o usuário apagou o grupo que ele estava lendo, move ele pro primeiro da lista (ou zera tudo)
+          if (_grupoId == idGrupo) {
+            if (_listaGruposApi.isNotEmpty) {
+              _trocarGrupo(int.parse(_listaGruposApi[0]['id'].toString()), _listaGruposApi[0]['nome']);
+            } else {
+              setState(() { _grupoId = 0; _nomeGrupoAtual = 'Sem Grupos'; _itens = []; });
+            }
+          }
+        }
+      } catch (e) {
+        print("Erro ao deletar grupo: $e");
+      }
+    }
   }
 
   Future<void> _sincronizarFilaOffline() async {
@@ -752,6 +955,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                       currentAccountPicture: const CircleAvatar(backgroundColor: Colors.white, child: Icon(Icons.person, color: Colors.green, size: 40)),
                     ),
                     if (_listaGruposApi.isEmpty) const ListTile(title: Text('Nenhum grupo encontrado.')),
+                    // Renderiza os grupos existentes
                     ..._listaGruposApi.map((grupo) {
                       final idGrupo = int.parse(grupo['id'].toString());
                       return ListTile(
@@ -759,9 +963,29 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                         title: Text(grupo['nome']),
                         selected: _grupoId == idGrupo,
                         selectedColor: Colors.green,
-                        onTap: () => _trocarGrupo(idGrupo, grupo['nome']),
+                        onTap: () {
+                          Navigator.pop(context); 
+                          _trocarGrupo(idGrupo, grupo['nome']);
+                        },
+                        // NOVIDADE: Botão de 3 pontinhos para abrir as opções!
+                        trailing: IconButton(
+                          icon: const Icon(Icons.more_vert, size: 20, color: Colors.grey),
+                          onPressed: () {
+                            Navigator.pop(context); // Fecha o drawer lateral
+                            _exibirOpcoesGrupo(idGrupo, grupo['nome']); // Abre o menu inferior
+                          },
+                        ),
                       );
                     }),
+                    const Divider(),
+                    ListTile(
+                      leading: const Icon(Icons.add_circle_outline, color: Colors.green),
+                      title: const Text('Criar Novo Grupo', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                      onTap: () {
+                        Navigator.pop(context); // Fecha o menu lateral
+                        _exibirDialogoNovoGrupo(); // Abre o Pop-up
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -920,18 +1144,19 @@ class _CadastroScreenState extends State<CadastroScreen> {
       final apiKey = dotenv.env['API_KEY'] ?? '';
 
       final response = await http.post(
-        Uri.parse('$baseUrl/usuarios'), // Chamando a rota que já existe!
+        Uri.parse('$baseUrl/usuarios'),
         headers: {'Content-Type': 'application/json', 'x-api-key': apiKey},
         body: jsonEncode({"nome": nome, "email": email, "senha": senha}),
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 201) {
-        // Sucesso (201 Created)
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Conta criada com sucesso! Faça login.'), backgroundColor: Colors.green),
+        
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => VerificacaoEmailScreen(email: email)),
         );
-        Navigator.pop(context); // Volta para a tela de Login automaticamente
+        
       } else {
         final resultado = jsonDecode(response.body);
         ScaffoldMessenger.of(context).showSnackBar(
