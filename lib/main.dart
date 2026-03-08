@@ -920,18 +920,19 @@ class _CadastroScreenState extends State<CadastroScreen> {
       final apiKey = dotenv.env['API_KEY'] ?? '';
 
       final response = await http.post(
-        Uri.parse('$baseUrl/usuarios'), // Chamando a rota que já existe!
+        Uri.parse('$baseUrl/usuarios'),
         headers: {'Content-Type': 'application/json', 'x-api-key': apiKey},
         body: jsonEncode({"nome": nome, "email": email, "senha": senha}),
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 201) {
-        // Sucesso (201 Created)
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Conta criada com sucesso! Faça login.'), backgroundColor: Colors.green),
+        
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => VerificacaoEmailScreen(email: email)),
         );
-        Navigator.pop(context); // Volta para a tela de Login automaticamente
+        
       } else {
         final resultado = jsonDecode(response.body);
         ScaffoldMessenger.of(context).showSnackBar(
