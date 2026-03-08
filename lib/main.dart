@@ -452,6 +452,130 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
     }
   }
 
+  // ==========================================================
+  // FUNÇÕES PARA EDITAR E DELETAR GRUPOS
+  // ==========================================================
+  void _exibirOpcoesGrupo(int idGrupo, String nomeAtual) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text('Opções do Grupo', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit, color: Colors.blue),
+              title: const Text('Editar Nome'),
+              onTap: () {
+                Navigator.pop(context); // Fecha o menu inferior
+                _exibirDialogoEditarGrupo(idGrupo, nomeAtual);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete, color: Colors.red),
+              title: const Text('Excluir Grupo'),
+              subtitle: const Text('Isso apagará todos os itens dentro dele!'),
+              onTap: () {
+                Navigator.pop(context); // Fecha o menu inferior
+                _confirmarExclusaoGrupo(idGrupo, nomeAtual);
+              },
+            ),
+            const SizedBox(height: 10),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _exibirDialogoEditarGrupo(int idGrupo, String nomeAtual) {
+    final nomeController = TextEditingController(text: nomeAtual);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Editar Grupo'),
+        content: TextField(
+          controller: nomeController,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(labelText: 'Novo nome'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _editarGrupoNaApi(idGrupo, nomeController.text.trim());
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
+            child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _editarGrupoNaApi(int id, String novoNome) async {
+    if (novoNome.isEmpty) return;
+    try {
+      final baseUrl = dotenv.env['API_URL'] ?? '';
+      final response = await http.put(
+        Uri.parse('$baseUrl/grupos'),
+        headers: _headersAuth(),
+        body: jsonEncode({"id": id, "nome": novoNome}),
+      );
+      if (response.statusCode == 200) {
+        if (_grupoId == id) setState(() => _nomeGrupoAtual = novoNome);
+        await _buscarGruposDaApi();
+      }
+    } catch (e) {
+      print("Erro ao editar grupo: $e");
+    }
+  }
+
+  Future<void> _confirmarExclusaoGrupo(int idGrupo, String nome) async {
+    bool? confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Excluir Grupo?', style: TextStyle(color: Colors.red)),
+        content: Text('Tem certeza que deseja excluir o grupo "$nome"?\n\nTODOS os itens dentro dele serão perdidos para sempre!'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            child: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar == true) {
+      try {
+        final baseUrl = dotenv.env['API_URL'] ?? '';
+        final response = await http.delete(
+          Uri.parse('$baseUrl/grupos?id=$idGrupo'),
+          headers: _headersAuth(),
+        );
+        if (response.statusCode == 200) {
+          await _buscarGruposDaApi();
+          // Se o usuário apagou o grupo que ele estava lendo, move ele pro primeiro da lista (ou zera tudo)
+          if (_grupoId == idGrupo) {
+            if (_listaGruposApi.isNotEmpty) {
+              _trocarGrupo(int.parse(_listaGruposApi[0]['id'].toString()), _listaGruposApi[0]['nome']);
+            } else {
+              setState(() { _grupoId = 0; _nomeGrupoAtual = 'Sem Grupos'; _itens = []; });
+            }
+          }
+        }
+      } catch (e) {
+        print("Erro ao deletar grupo: $e");
+      }
+    }
+  }
+
   Future<void> _sincronizarFilaOffline() async {
     final prefs = await SharedPreferences.getInstance();
     final String filaString = prefs.getString('fila_offline_$_usuarioId') ?? '[]';
@@ -843,9 +967,16 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                           Navigator.pop(context); 
                           _trocarGrupo(idGrupo, grupo['nome']);
                         },
+                        // NOVIDADE: Botão de 3 pontinhos para abrir as opções!
+                        trailing: IconButton(
+                          icon: const Icon(Icons.more_vert, size: 20, color: Colors.grey),
+                          onPressed: () {
+                            Navigator.pop(context); // Fecha o drawer lateral
+                            _exibirOpcoesGrupo(idGrupo, grupo['nome']); // Abre o menu inferior
+                          },
+                        ),
                       );
                     }),
-                    // ---> COLE ESTE BLOCO AQUI! <---
                     const Divider(),
                     ListTile(
                       leading: const Icon(Icons.add_circle_outline, color: Colors.green),
@@ -855,7 +986,6 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                         _exibirDialogoNovoGrupo(); // Abre o Pop-up
                       },
                     ),
-                    // --------------------------------
                   ],
                 ),
               ),
