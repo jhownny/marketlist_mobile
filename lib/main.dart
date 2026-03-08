@@ -369,8 +369,87 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
       _grupoId = novoId;
       _nomeGrupoAtual = nome;
     });
-    Navigator.pop(context); 
     buscarItens(); 
+  }
+
+  // ==========================================================
+  // FUNÇÕES PARA CRIAR NOVO GRUPO
+  // ==========================================================
+  void _exibirDialogoNovoGrupo() {
+    final nomeController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Novo Grupo de Compras'),
+        content: TextField(
+          controller: nomeController,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(
+            labelText: 'Nome do Grupo',
+            hintText: 'Ex: Churrasco, Mês, Festa...',
+            prefixIcon: Icon(Icons.shopping_bag),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context), 
+            child: const Text('Cancelar', style: TextStyle(color: Colors.grey))
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _criarNovoGrupoNaApi(nomeController.text.trim());
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+            child: const Text('Criar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _criarNovoGrupoNaApi(String nome) async {
+    if (nome.isEmpty) return;
+
+    setState(() => _carregando = true);
+
+    try {
+      final baseUrl = dotenv.env['API_URL'] ?? '';
+      
+      final response = await http.post(
+        Uri.parse('$baseUrl/grupos'),
+        headers: _headersAuth(), // Envia o crachá JWT de segurança!
+        body: jsonEncode({
+          "nome": nome,
+          "icone": "shopping_cart" // Ícone padrão para novos grupos
+        }),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 201) {
+        final dados = jsonDecode(response.body);
+        final novoId = int.tryParse(dados['id'].toString()) ?? 0;
+
+        // Atualiza a lista de grupos do menu lateral
+        await _buscarGruposDaApi();
+
+        // Muda automaticamente a tela para o grupo que acabou de ser criado
+        if (novoId > 0) {
+          _trocarGrupo(novoId, nome);
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Grupo criado com sucesso!'), backgroundColor: Colors.green),
+        );
+      } else {
+        throw Exception('Erro da API');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Erro ao criar grupo. Verifique a conexão.'), backgroundColor: Colors.red),
+      );
+      setState(() => _carregando = false);
+    }
   }
 
   Future<void> _sincronizarFilaOffline() async {
@@ -752,6 +831,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                       currentAccountPicture: const CircleAvatar(backgroundColor: Colors.white, child: Icon(Icons.person, color: Colors.green, size: 40)),
                     ),
                     if (_listaGruposApi.isEmpty) const ListTile(title: Text('Nenhum grupo encontrado.')),
+                    // Renderiza os grupos existentes
                     ..._listaGruposApi.map((grupo) {
                       final idGrupo = int.parse(grupo['id'].toString());
                       return ListTile(
@@ -759,9 +839,23 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                         title: Text(grupo['nome']),
                         selected: _grupoId == idGrupo,
                         selectedColor: Colors.green,
-                        onTap: () => _trocarGrupo(idGrupo, grupo['nome']),
+                        onTap: () {
+                          Navigator.pop(context); 
+                          _trocarGrupo(idGrupo, grupo['nome']);
+                        },
                       );
                     }),
+                    // ---> COLE ESTE BLOCO AQUI! <---
+                    const Divider(),
+                    ListTile(
+                      leading: const Icon(Icons.add_circle_outline, color: Colors.green),
+                      title: const Text('Criar Novo Grupo', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                      onTap: () {
+                        Navigator.pop(context); // Fecha o menu lateral
+                        _exibirDialogoNovoGrupo(); // Abre o Pop-up
+                      },
+                    ),
+                    // --------------------------------
                   ],
                 ),
               ),
