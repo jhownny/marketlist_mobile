@@ -738,40 +738,42 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
         ],
       ),
       drawer: Drawer(
-        child: Column(
-          children: [
-            Expanded(
-              child: ListView(
-                padding: EdgeInsets.zero,
-                children: [
-                  UserAccountsDrawerHeader(
-                    decoration: const BoxDecoration(color: Colors.green),
-                    accountName: Text(_nomeUsuarioAtual, style: const TextStyle(fontSize: 18)),
-                    accountEmail: const Text('MarketList User'),
-                    currentAccountPicture: const CircleAvatar(backgroundColor: Colors.white, child: Icon(Icons.person, color: Colors.green, size: 40)),
-                  ),
-                  if (_listaGruposApi.isEmpty) const ListTile(title: Text('Nenhum grupo encontrado.')),
-                  ..._listaGruposApi.map((grupo) {
-                    final idGrupo = int.parse(grupo['id'].toString());
-                    return ListTile(
-                      leading: const Icon(Icons.list_alt),
-                      title: Text(grupo['nome']),
-                      selected: _grupoId == idGrupo,
-                      selectedColor: Colors.green,
-                      onTap: () => _trocarGrupo(idGrupo, grupo['nome']),
-                    );
-                  }),
-                ],
+        child: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: ListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    UserAccountsDrawerHeader(
+                      decoration: const BoxDecoration(color: Colors.green),
+                      accountName: Text(_nomeUsuarioAtual, style: const TextStyle(fontSize: 18)),
+                      accountEmail: const Text('MarketList User'),
+                      currentAccountPicture: const CircleAvatar(backgroundColor: Colors.white, child: Icon(Icons.person, color: Colors.green, size: 40)),
+                    ),
+                    if (_listaGruposApi.isEmpty) const ListTile(title: Text('Nenhum grupo encontrado.')),
+                    ..._listaGruposApi.map((grupo) {
+                      final idGrupo = int.parse(grupo['id'].toString());
+                      return ListTile(
+                        leading: const Icon(Icons.list_alt),
+                        title: Text(grupo['nome']),
+                        selected: _grupoId == idGrupo,
+                        selectedColor: Colors.green,
+                        onTap: () => _trocarGrupo(idGrupo, grupo['nome']),
+                      );
+                    }),
+                  ],
+                ),
               ),
-            ),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.exit_to_app, color: Colors.red),
-              title: const Text('Sair', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-              onTap: _fazerLogout,
-            ),
-            const SizedBox(height: 10),
-          ],
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.exit_to_app, color: Colors.red),
+                title: const Text('Sair', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                onTap: _fazerLogout,
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
         ),
       ),
       body: _buildBody(),
