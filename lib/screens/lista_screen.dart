@@ -5,7 +5,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'login_screen.dart'; // Para poder fazer o Logout e voltar pro login
+import 'login_screen.dart';
+import 'historico_screen.dart';
 
 class ListaComprasScreen extends StatefulWidget {
   const ListaComprasScreen({super.key});
@@ -730,6 +731,20 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
         backgroundColor: Colors.green,
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.receipt_long),
+            tooltip: 'Ver Histórico',
+            onPressed: () {
+              if (_grupoId != 0) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => HistoricoScreen(grupoId: _grupoId, nomeGrupo: _nomeGrupoAtual),
+                  ),
+                );
+              }
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () { _buscarGruposDaApi(); _sincronizarFilaOffline(); buscarItens(); },
