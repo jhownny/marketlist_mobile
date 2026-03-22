@@ -54,12 +54,14 @@ O objetivo é oferecer uma experiência nativa, rápida e fluida, mantendo a int
 - [x] **Gestão de Grupos:** Alternar e editar diferentes listas de compras.
 - [x] **Histórico de Listas:** Manter um histórico de listas anteriores para comparação.
 - [x] **Verificação de Email:** Mandar um codigo de verificação para confirmar a existencia do email.
-- [ ] **Recuperação de Senha:** (Em breve) Fluxo de "Esqueci minha senha" com validação segura via código OTP temporário enviado ao e-mail.
-- [ ] **Exclusão de Conta (LGPD/GDPR):** (Em breve) Opção nativa para o usuário apagar permanentemente sua conta e rastros de dados no banco, atendendo às políticas de privacidade.
-- [ ] **Compartilhamento de Recibo:** (Em breve) Exportar o comprovante de compras finalizadas para envio via WhatsApp e outros apps.
-- [ ] **Dashboard Financeiro:** (Em breve) Aba de estatísticas com gráficos visuais detalhando os gastos totais do usuário por mês e por grupos de compras.
-- [ ] **Orçamento por Lista:** (Em breve) Definir um limite de gastos para o grupo e acompanhar o saldo (positivo ou negativo) em tempo real.
-- [ ] **Listas Compartilhadas:** (Em breve) Permitir que contas diferentes gerenciem e editem o mesmo grupo de compras de forma colaborativa.
+
+### ⏳ Metas Futuras (Roadmap)
+- [ ] **Recuperação de Senha:** Fluxo de "Esqueci minha senha" com validação segura via código OTP temporário enviado ao e-mail.
+- [ ] **Exclusão de Conta (LGPD/GDPR):** Opção nativa para o usuário apagar permanentemente sua conta e rastros de dados no banco, atendendo às políticas de privacidade.
+- [ ] **Compartilhamento de Recibo:** Exportar o comprovante de compras finalizadas para envio via WhatsApp e outros apps.
+- [ ] **Dashboard Financeiro:** Aba de estatísticas com gráficos visuais detalhando os gastos totais do usuário por mês e por grupos de compras.
+- [ ] **Orçamento por Lista:** Definir um limite de gastos para o grupo e acompanhar o saldo (positivo ou negativo) em tempo real.
+- [ ] **Listas Compartilhadas:** Permitir que contas diferentes gerenciem e editem o mesmo grupo de compras de forma colaborativa.
 
       
 ---
