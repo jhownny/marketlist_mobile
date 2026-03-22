@@ -5,6 +5,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'lista_screen.dart'; // Para ir para a lista após logar
 import 'cadastro_screen.dart'; // Para abrir a tela de cadastro
+import 'recuperacao_screen.dart';
 
 // ==========================================================
 // TELA DE VERIFICAÇÃO DE LOGIN
@@ -160,6 +161,15 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       const SizedBox(height: 15),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const RecuperacaoScreen()),
+                          );
+                        },
+                        child: const Text('Esqueci minha senha', style: TextStyle(color: Colors.green)),
+                      ),
                       TextButton(
                         onPressed: () {
                           Navigator.push(
