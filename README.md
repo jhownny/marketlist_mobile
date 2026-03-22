@@ -27,7 +27,7 @@
 
 ## 📱 Sobre o Projeto
 
-O **MarketList Mobile** é a interface visual para o ecossistema MarketList. Desenvolvido em **Flutter**, ele consome a mesma API utilizada pelo nosso Bot do Telegram, permitindo que os usuários visualizem e gerenciem suas listas de compras de forma sincronizada em qualquer dispositivo.
+O **MarketList Mobile** é a interface oficial e principal do ecossistema MarketList. Desenvolvido em **Flutter**, ele consome uma API própria e dedicada, permitindo que os usuários criem, visualizem e gerenciem suas listas de compras de forma autônoma e segura direto do smartphone.
 
 O objetivo é oferecer uma experiência nativa, rápida e fluida, mantendo a integridade dos dados através de uma API RESTful segura em PHP.
 
@@ -54,7 +54,14 @@ O objetivo é oferecer uma experiência nativa, rápida e fluida, mantendo a int
 - [x] **Gestão de Grupos:** Alternar e editar diferentes listas de compras.
 - [x] **Histórico de Listas:** Manter um histórico de listas anteriores para comparação.
 - [x] **Verificação de Email:** Mandar um codigo de verificação para confirmar a existencia do email.
+- [ ] **Recuperação de Senha:** (Em breve) Fluxo de "Esqueci minha senha" com validação segura via código OTP temporário enviado ao e-mail.
+- [ ] **Exclusão de Conta (LGPD/GDPR):** (Em breve) Opção nativa para o usuário apagar permanentemente sua conta e rastros de dados no banco, atendendo às políticas de privacidade.
+- [ ] **Compartilhamento de Recibo:** (Em breve) Exportar o comprovante de compras finalizadas para envio via WhatsApp e outros apps.
+- [ ] **Dashboard Financeiro:** (Em breve) Aba de estatísticas com gráficos visuais detalhando os gastos totais do usuário por mês e por grupos de compras.
+- [ ] **Orçamento por Lista:** (Em breve) Definir um limite de gastos para o grupo e acompanhar o saldo (positivo ou negativo) em tempo real.
+- [ ] **Listas Compartilhadas:** (Em breve) Permitir que contas diferentes gerenciem e editem o mesmo grupo de compras de forma colaborativa.
 
+      
 ---
 <div id="tecnologias"></div>
 
