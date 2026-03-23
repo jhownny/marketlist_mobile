@@ -65,6 +65,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _senhaController = TextEditingController();
   bool _carregando = false;
+  bool _ocultarSenha = true;
 
   Future<void> _fazerLogin() async {
     final email = _emailController.text.trim();
@@ -124,63 +125,91 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Image.asset('assets/Text-MarketList-logo2.png', height: 220, fit: BoxFit.contain),
-              const SizedBox(height: 40),
-              Card(
-                elevation: 4,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Column(
-                    children: [
-                      TextField(
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: const InputDecoration(labelText: 'E-mail', prefixIcon: Icon(Icons.email)),
+              // ==========================================
+              // A SUA LOGOMARCA VOLTOU AQUI!
+              // ==========================================
+              Image.asset(
+                'assets/Text-MarketList-logo2.png', 
+                height: 180,
+                fit: BoxFit.contain,
+              ),
+              const SizedBox(height: 30),
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 5)),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    // Campo E-mail
+                    TextField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: InputDecoration(
+                        labelText: 'E-mail',
+                        prefixIcon: const Icon(Icons.email_outlined),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                        filled: true,
+                        fillColor: Colors.grey[50],
                       ),
-                      const SizedBox(height: 15),
-                      TextField(
-                        controller: _senhaController,
-                        obscureText: true,
-                        decoration: const InputDecoration(labelText: 'Senha', prefixIcon: Icon(Icons.lock)),
-                      ),
-                      const SizedBox(height: 30),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: _carregando ? null : _fazerLogin,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                          child: _carregando
-                              ? const CircularProgressIndicator(color: Colors.white)
-                              : const Text('Entrar', style: TextStyle(fontSize: 18)),
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // Campo Senha
+                    TextField(
+                      controller: _senhaController,
+                      obscureText: _ocultarSenha,
+                      decoration: InputDecoration(
+                        labelText: 'Senha',
+                        prefixIcon: const Icon(Icons.lock_outline),
+                        suffixIcon: IconButton(
+                          icon: Icon(_ocultarSenha ? Icons.visibility_off : Icons.visibility, color: Colors.grey),
+                          onPressed: () {
+                            setState(() { _ocultarSenha = !_ocultarSenha; });
+                          },
                         ),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                        filled: true,
+                        fillColor: Colors.grey[50],
                       ),
-                      const SizedBox(height: 15),
-                      TextButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => const RecuperacaoScreen()),
-                          );
-                        },
-                        child: const Text('Esqueci minha senha', style: TextStyle(color: Colors.green)),
+                    ),
+                    const SizedBox(height: 30),
+
+                    // Botão Entrar
+                    SizedBox(
+                      width: double.infinity,
+                      height: 55,
+                      child: ElevatedButton(
+                        onPressed: _carregando ? null : _fazerLogin,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 2,
+                        ),
+                        child: _carregando
+                            ? const CircularProgressIndicator(color: Colors.white)
+                            : const Text('Entrar', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                       ),
-                      TextButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => const CadastroScreen()),
-                          );
-                        },
-                        child: const Text('Não tem uma conta? Cadastre-se', style: TextStyle(color: Colors.green)),
-                      ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 15),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => const RecuperacaoScreen()));
+                      },
+                      child: const Text('Esqueci minha senha', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600)),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => const CadastroScreen()));
+                      },
+                      child: const Text('Não tem uma conta? Cadastre-se', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
                 ),
               ),
             ],
