@@ -117,19 +117,25 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // VARIÁVEIS DE TEMA INTELIGENTE
+    final theme = Theme.of(context);
+    final onBackgroundColor = theme.colorScheme.onBackground;
+    final surfaceColor = theme.colorScheme.surface;
+    final isDark = theme.brightness == Brightness.dark;
+    final fillColor = isDark ? Colors.grey[800] : Colors.grey[50];
+
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // ==========================================
-              // A SUA LOGOMARCA VOLTOU AQUI!
-              // ==========================================
               Image.asset(
-                'assets/Text-MarketList-logo2.png', 
+                isDark 
+                    ? 'assets/Text-MarketList-White-logo.png'
+                    : 'assets/Text-MarketList-logo2.png',
                 height: 180,
                 fit: BoxFit.contain,
               ),
@@ -137,11 +143,9 @@ class _LoginScreenState extends State<LoginScreen> {
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: surfaceColor,
                   borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 5)),
-                  ],
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 5))],
                 ),
                 child: Column(
                   children: [
@@ -149,12 +153,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     TextField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
+                      style: TextStyle(color: onBackgroundColor),
                       decoration: InputDecoration(
                         labelText: 'E-mail',
-                        prefixIcon: const Icon(Icons.email_outlined),
+                        labelStyle: TextStyle(color: onBackgroundColor.withOpacity(0.6)),
+                        prefixIcon: Icon(Icons.email_outlined, color: onBackgroundColor.withOpacity(0.6)),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                         filled: true,
-                        fillColor: Colors.grey[50],
+                        fillColor: fillColor,
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -163,18 +169,20 @@ class _LoginScreenState extends State<LoginScreen> {
                     TextField(
                       controller: _senhaController,
                       obscureText: _ocultarSenha,
+                      style: TextStyle(color: onBackgroundColor),
                       decoration: InputDecoration(
                         labelText: 'Senha',
-                        prefixIcon: const Icon(Icons.lock_outline),
+                        labelStyle: TextStyle(color: onBackgroundColor.withOpacity(0.6)),
+                        prefixIcon: Icon(Icons.lock_outline, color: onBackgroundColor.withOpacity(0.6)),
                         suffixIcon: IconButton(
-                          icon: Icon(_ocultarSenha ? Icons.visibility_off : Icons.visibility, color: Colors.grey),
+                          icon: Icon(_ocultarSenha ? Icons.visibility_off : Icons.visibility, color: onBackgroundColor.withOpacity(0.6)),
                           onPressed: () {
                             setState(() { _ocultarSenha = !_ocultarSenha; });
                           },
                         ),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                         filled: true,
-                        fillColor: Colors.grey[50],
+                        fillColor: fillColor,
                       ),
                     ),
                     const SizedBox(height: 30),
@@ -201,7 +209,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       onPressed: () {
                         Navigator.push(context, MaterialPageRoute(builder: (context) => const RecuperacaoScreen()));
                       },
-                      child: const Text('Esqueci minha senha', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600)),
+                      child: Text('Esqueci minha senha', style: TextStyle(color: onBackgroundColor.withOpacity(0.7), fontWeight: FontWeight.w600)),
                     ),
                     TextButton(
                       onPressed: () {

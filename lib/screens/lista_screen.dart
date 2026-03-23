@@ -7,6 +7,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'login_screen.dart';
 import 'historico_screen.dart';
+import 'configuracoes_screen.dart';
 
 class ListaComprasScreen extends StatefulWidget {
   const ListaComprasScreen({super.key});
@@ -778,7 +779,6 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                           Navigator.pop(context); 
                           _trocarGrupo(idGrupo, grupo['nome']);
                         },
-                        // NOVIDADE: Botão de 3 pontinhos para abrir as opções!
                         trailing: IconButton(
                           icon: const Icon(Icons.more_vert, size: 20, color: Colors.grey),
                           onPressed: () {
@@ -801,12 +801,17 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                 ),
               ),
               const Divider(),
-              ListTile(
-                leading: const Icon(Icons.exit_to_app, color: Colors.red),
-                title: const Text('Sair', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                onTap: _fazerLogout,
-              ),
-              const SizedBox(height: 10),
+                ListTile(
+                    leading: const Icon(Icons.settings),
+                    title: const Text('Configurações'),
+                    onTap: () {
+                      Navigator.pop(context); // Fecha o menu lateral
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const ConfiguracoesScreen()),
+                      );
+                    },
+                ),
             ],
           ),
         ),

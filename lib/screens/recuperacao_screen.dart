@@ -80,12 +80,18 @@ class _RecuperacaoScreenState extends State<RecuperacaoScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final onBackgroundColor = theme.colorScheme.onBackground;
+    final surfaceColor = theme.colorScheme.surface;
+    final isDark = theme.brightness == Brightness.dark;
+    final fillColor = isDark ? Colors.grey[800] : Colors.grey[50]; // Cor de fundo do campo de texto
+
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: theme.scaffoldBackgroundColor, // Fundo adaptável
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.green),
+        iconTheme: IconThemeData(color: onBackgroundColor), // Ícone de voltar adaptável
       ),
       body: Center(
         child: SingleChildScrollView(
@@ -95,16 +101,13 @@ class _RecuperacaoScreenState extends State<RecuperacaoScreen> {
             children: [
               Container(
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
+                decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), shape: BoxShape.circle),
                 child: Icon(_etapaAtual == 1 ? Icons.lock_reset : Icons.mark_email_read, size: 60, color: Colors.green),
               ),
               const SizedBox(height: 20),
               Text(
                 _etapaAtual == 1 ? 'Esqueceu sua senha?' : 'Verifique seu e-mail',
-                style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.black87),
+                style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: onBackgroundColor), // Título adaptável
               ),
               const SizedBox(height: 8),
               Text(
@@ -112,19 +115,16 @@ class _RecuperacaoScreenState extends State<RecuperacaoScreen> {
                   ? 'Digite seu e-mail para receber o código.' 
                   : 'Enviamos um código para ${_emailController.text}',
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 14, color: Colors.grey),
+                style: TextStyle(fontSize: 14, color: onBackgroundColor.withOpacity(0.7)), // Legenda adaptável
               ),
               const SizedBox(height: 30),
 
-              // O Cartão Moderno
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: surfaceColor, // Cor do cartão adaptável
                   borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 5)),
-                  ],
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 5))],
                 ),
                 child: Column(
                   children: [
@@ -133,12 +133,14 @@ class _RecuperacaoScreenState extends State<RecuperacaoScreen> {
                       TextField(
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
+                        style: TextStyle(color: onBackgroundColor), // Texto digitado adaptável
                         decoration: InputDecoration(
                           labelText: 'Seu E-mail Cadastrado',
-                          prefixIcon: const Icon(Icons.email_outlined),
+                          labelStyle: TextStyle(color: onBackgroundColor.withOpacity(0.6)), // Rótulo adaptável
+                          prefixIcon: Icon(Icons.email_outlined, color: onBackgroundColor.withOpacity(0.6)), // Ícone adaptável
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                           filled: true,
-                          fillColor: Colors.grey[50],
+                          fillColor: fillColor, // Fundo do campo adaptável
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -164,31 +166,35 @@ class _RecuperacaoScreenState extends State<RecuperacaoScreen> {
                         controller: _codigoController,
                         keyboardType: TextInputType.number,
                         maxLength: 6,
+                        style: TextStyle(color: onBackgroundColor),
                         decoration: InputDecoration(
                           labelText: 'Código de 6 dígitos',
+                          labelStyle: TextStyle(color: onBackgroundColor.withOpacity(0.6)),
                           counterText: "",
-                          prefixIcon: const Icon(Icons.pin_outlined),
+                          prefixIcon: Icon(Icons.pin_outlined, color: onBackgroundColor.withOpacity(0.6)),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                           filled: true,
-                          fillColor: Colors.grey[50],
+                          fillColor: fillColor,
                         ),
                       ),
                       const SizedBox(height: 16),
                       TextField(
                         controller: _novaSenhaController,
                         obscureText: _ocultarNovaSenha,
+                        style: TextStyle(color: onBackgroundColor),
                         decoration: InputDecoration(
                           labelText: 'Nova Senha',
-                          prefixIcon: const Icon(Icons.lock_outline),
+                          labelStyle: TextStyle(color: onBackgroundColor.withOpacity(0.6)),
+                          prefixIcon: Icon(Icons.lock_outline, color: onBackgroundColor.withOpacity(0.6)),
                           suffixIcon: IconButton(
-                            icon: Icon(_ocultarNovaSenha ? Icons.visibility_off : Icons.visibility, color: Colors.grey),
+                            icon: Icon(_ocultarNovaSenha ? Icons.visibility_off : Icons.visibility, color: onBackgroundColor.withOpacity(0.6)),
                             onPressed: () {
                               setState(() { _ocultarNovaSenha = !_ocultarNovaSenha; });
                             },
                           ),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                           filled: true,
-                          fillColor: Colors.grey[50],
+                          fillColor: fillColor,
                         ),
                       ),
                       const SizedBox(height: 24),
