@@ -29,6 +29,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
   String _tokenJwt = '';
   int _grupoId = 0; 
   String _nomeGrupoAtual = 'Carregando...';
+  double _orcamentoAtual = 0.0;
 
   @override
   void initState() {
@@ -149,9 +150,12 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
           if (_listaGruposApi.isNotEmpty) {
             _grupoId = int.parse(_listaGruposApi[0]['id'].toString());
             _nomeGrupoAtual = _listaGruposApi[0]['nome'];
+            // Tenta ler o orçamento, se falhar ou não existir, fica 0.0
+            _orcamentoAtual = double.tryParse(_listaGruposApi[0]['orcamento']?.toString() ?? '0') ?? 0.0;
           } else {
             _grupoId = 0;
             _nomeGrupoAtual = 'Sem Grupos';
+            _orcamentoAtual = 0.0;
           }
         });
       } else if (response.statusCode == 401) {
@@ -162,10 +166,11 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
     }
   }
 
-  void _trocarGrupo(int novoId, String nome) {
+  void _trocarGrupo(int novoId, String nome, double orcamento) {
     setState(() {
       _grupoId = novoId;
       _nomeGrupoAtual = nome;
+      _orcamentoAtual = orcamento; // Atualiza o orçamento atual
     });
     buscarItens(); 
   }
@@ -175,29 +180,35 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
   // ==========================================================
   void _exibirDialogoNovoGrupo() {
     final nomeController = TextEditingController();
+    final orcamentoController = TextEditingController(); // Novo controlador
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Novo Grupo de Compras'),
-        content: TextField(
-          controller: nomeController,
-          textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(
-            labelText: 'Nome do Grupo',
-            hintText: 'Ex: Churrasco, Mês, Festa...',
-            prefixIcon: Icon(Icons.shopping_bag),
-          ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nomeController,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(labelText: 'Nome do Grupo', prefixIcon: Icon(Icons.shopping_bag)),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: orcamentoController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'Orçamento (Opcional)', prefixText: 'R\$ ', prefixIcon: Icon(Icons.account_balance_wallet)),
+            ),
+          ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context), 
-            child: const Text('Cancelar', style: TextStyle(color: Colors.grey))
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
-              _criarNovoGrupoNaApi(nomeController.text.trim());
+              double orcamento = double.tryParse(orcamentoController.text.replaceAll(',', '.')) ?? 0.0;
+              _criarNovoGrupoNaApi(nomeController.text.trim(), orcamento);
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
             child: const Text('Criar'),
@@ -207,7 +218,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
     );
   }
 
-  Future<void> _criarNovoGrupoNaApi(String nome) async {
+  Future<void> _criarNovoGrupoNaApi(String nome, double orcamento) async {
     if (nome.isEmpty) return;
 
     setState(() => _carregando = true);
@@ -233,7 +244,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
 
         // Muda automaticamente a tela para o grupo que acabou de ser criado
         if (novoId > 0) {
-          _trocarGrupo(novoId, nome);
+          _trocarGrupo(novoId, nome, orcamento);
         }
         
         ScaffoldMessenger.of(context).showSnackBar(
@@ -291,21 +302,38 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
 
   void _exibirDialogoEditarGrupo(int idGrupo, String nomeAtual) {
     final nomeController = TextEditingController(text: nomeAtual);
+    final orcamentoController = TextEditingController(
+      text: _orcamentoAtual > 0 ? _orcamentoAtual.toStringAsFixed(2) : ''
+    );
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Editar Grupo'),
-        content: TextField(
-          controller: nomeController,
-          textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(labelText: 'Novo nome'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nomeController,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(labelText: 'Novo nome'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: orcamentoController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'Orçamento (R\$)', prefixIcon: Icon(Icons.account_balance_wallet)),
+            ),
+          ],
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
-              _editarGrupoNaApi(idGrupo, nomeController.text.trim());
+              double orc = double.tryParse(orcamentoController.text.replaceAll(',', '.')) ?? 0.0;
+              // Passa o orçamento para a API
+              _editarGrupoNaApi(idGrupo, nomeController.text.trim(), orc); 
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
             child: const Text('Salvar'),
@@ -315,17 +343,23 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
     );
   }
 
-  Future<void> _editarGrupoNaApi(int id, String novoNome) async {
+  Future<void> _editarGrupoNaApi(int id, String novoNome, double novoOrcamento) async {
     if (novoNome.isEmpty) return;
     try {
       final baseUrl = dotenv.env['API_URL'] ?? '';
       final response = await http.put(
         Uri.parse('$baseUrl/grupos'),
         headers: _headersAuth(),
-        body: jsonEncode({"id": id, "nome": novoNome}),
+        // Envia o orçamento junto no pacote (JSON) para o PHP!
+        body: jsonEncode({"id": id, "nome": novoNome, "orcamento": novoOrcamento}),
       );
       if (response.statusCode == 200) {
-        if (_grupoId == id) setState(() => _nomeGrupoAtual = novoNome);
+        if (_grupoId == id) {
+          setState(() { 
+            _nomeGrupoAtual = novoNome; 
+            _orcamentoAtual = novoOrcamento; 
+          });
+        }
         await _buscarGruposDaApi();
       }
     } catch (e) {
@@ -362,7 +396,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
           // Se o usuário apagou o grupo que ele estava lendo, move ele pro primeiro da lista (ou zera tudo)
           if (_grupoId == idGrupo) {
             if (_listaGruposApi.isNotEmpty) {
-              _trocarGrupo(int.parse(_listaGruposApi[0]['id'].toString()), _listaGruposApi[0]['nome']);
+              _trocarGrupo(int.parse(_listaGruposApi[0]['id'].toString()), _listaGruposApi[0]['nome'], _listaGruposApi[0]['orcamento']);
             } else {
               setState(() { _grupoId = 0; _nomeGrupoAtual = 'Sem Grupos'; _itens = []; });
             }
@@ -502,8 +536,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
       ).timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        await _sincronizarFilaOffline(); 
-        buscarItens(); 
+        buscarItens();
       } else if (response.statusCode == 401) {
         _fazerLogout();
       } else {
@@ -711,6 +744,52 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
     );
   }
 
+  Widget _construirBarraOrcamento() {
+    if (_orcamentoAtual <= 0) return const SizedBox.shrink(); // Esconde se não tiver orçamento
+
+    double totalAtual = _calcularTotalParcial(); // Puxa o total sozinho
+    double percentagem = totalAtual / _orcamentoAtual;
+    bool estourou = percentagem > 1.0;
+    
+    // Limita a barra visualmente a 100% (1.0) para ela não "vazar" da tela
+    double percentagemBarra = percentagem > 1.0 ? 1.0 : percentagem;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      color: Theme.of(context).colorScheme.surface,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Orçamento: R\$ ${_orcamentoAtual.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text(
+                'R\$ ${totalAtual.toStringAsFixed(2)}',
+                style: TextStyle(fontWeight: FontWeight.bold, color: estourou ? Colors.red : Colors.green),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: LinearProgressIndicator(
+              value: percentagemBarra,
+              minHeight: 10,
+              backgroundColor: Colors.grey[300],
+              valueColor: AlwaysStoppedAnimation<Color>(estourou ? Colors.red : (percentagem > 0.8 ? Colors.orange : Colors.green)),
+            ),
+          ),
+          if (estourou)
+            const Padding(
+              padding: EdgeInsets.only(top: 4.0),
+              child: Text('Atenção: Orçamento ultrapassado!', style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold)),
+            )
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final temItensPendentes = _itens.any((i) => i['status'] == 'pendente' || i['status'] == 'aguardando_sync');
@@ -748,7 +827,10 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () { _buscarGruposDaApi(); _sincronizarFilaOffline(); buscarItens(); },
+            onPressed: () async { 
+              await _buscarGruposDaApi();
+              await buscarItens(); 
+            },
           )
         ],
       ),
@@ -777,7 +859,8 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                         selectedColor: Colors.green,
                         onTap: () {
                           Navigator.pop(context); 
-                          _trocarGrupo(idGrupo, grupo['nome']);
+                          double orc = double.tryParse(grupo['orcamento']?.toString() ?? '0') ?? 0.0;
+                          _trocarGrupo(idGrupo, grupo['nome'], orc);
                         },
                         trailing: IconButton(
                           icon: const Icon(Icons.more_vert, size: 20, color: Colors.grey),
@@ -879,48 +962,56 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
       );
     }
 
-    return ListView.builder(
-      itemCount: _itens.length,
-      padding: const EdgeInsets.all(8),
-      itemBuilder: (context, index) {
-        final item = _itens[index];
-        final nomeProduto = item['produto'] ?? 'Produto sem nome';
-        final preco = double.tryParse(item['preco'].toString()) ?? 0.0;
-        final status = item['status'] ?? 'pendente';
-        
-        final isFinalizado = status == 'finalizado';
-        final isAguardando = status == 'aguardando_sync';
+    return Column(
+    children: [
+      _construirBarraOrcamento(),
+      
+      Expanded(
+        child: ListView.builder(
+          itemCount: _itens.length,
+          padding: const EdgeInsets.all(8),
+          itemBuilder: (context, index) {
+            final item = _itens[index];
+            final nomeProduto = item['produto'] ?? 'Produto sem nome';
+            final preco = double.tryParse(item['preco'].toString()) ?? 0.0;
+            final status = item['status'] ?? 'pendente';
+            
+            final isFinalizado = status == 'finalizado';
+            final isAguardando = status == 'aguardando_sync';
 
-        return Dismissible(
-          key: ValueKey(item['id'] ?? UniqueKey().toString()), 
-          direction: (isFinalizado || isAguardando) ? DismissDirection.none : DismissDirection.horizontal,
-          background: Container(color: Colors.blue, alignment: Alignment.centerLeft, padding: const EdgeInsets.symmetric(horizontal: 20), child: const Icon(Icons.edit, color: Colors.white, size: 30)),
-          secondaryBackground: Container(color: Colors.red, alignment: Alignment.centerRight, padding: const EdgeInsets.symmetric(horizontal: 20), child: const Icon(Icons.delete, color: Colors.white, size: 30)),
-          confirmDismiss: (direction) async {
-            if (direction == DismissDirection.startToEnd) {
-              _exibirDialogoEditar(item); return false; 
-            } else if (direction == DismissDirection.endToStart) {
-              return await _confirmarExclusao(item); 
-            }
-            return false;
-          },
-          child: Card(
-            elevation: isAguardando ? 0 : 2,
-            color: isFinalizado ? Colors.grey[100] : (isAguardando ? Colors.orange[50] : Colors.white),
-            margin: const EdgeInsets.symmetric(vertical: 5),
-            shape: isAguardando ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: Colors.orange.shade300, width: 1)) : RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            child: ListTile(
-              leading: CircleAvatar(
-                backgroundColor: isFinalizado ? Colors.grey : (isAguardando ? Colors.orange : Colors.green),
-                child: Icon(isFinalizado ? Icons.check : (isAguardando ? Icons.access_time : Icons.shopping_cart), color: Colors.white, size: 20),
+            return Dismissible(
+              key: ValueKey(item['id'] ?? UniqueKey().toString()), 
+              direction: (isFinalizado || isAguardando) ? DismissDirection.none : DismissDirection.horizontal,
+              background: Container(color: Colors.blue, alignment: Alignment.centerLeft, padding: const EdgeInsets.symmetric(horizontal: 20), child: const Icon(Icons.edit, color: Colors.white, size: 30)),
+              secondaryBackground: Container(color: Colors.red, alignment: Alignment.centerRight, padding: const EdgeInsets.symmetric(horizontal: 20), child: const Icon(Icons.delete, color: Colors.white, size: 30)),
+              confirmDismiss: (direction) async {
+                if (direction == DismissDirection.startToEnd) {
+                  _exibirDialogoEditar(item); return false; 
+                } else if (direction == DismissDirection.endToStart) {
+                  return await _confirmarExclusao(item); 
+                }
+                return false;
+              },
+              child: Card(
+                elevation: isAguardando ? 0 : 2,
+                color: isFinalizado ? Colors.grey[100] : (isAguardando ? Colors.orange[50] : Colors.white),
+                margin: const EdgeInsets.symmetric(vertical: 5),
+                shape: isAguardando ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: Colors.orange.shade300, width: 1)) : RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: isFinalizado ? Colors.grey : (isAguardando ? Colors.orange : Colors.green),
+                    child: Icon(isFinalizado ? Icons.check : (isAguardando ? Icons.access_time : Icons.shopping_cart), color: Colors.white, size: 20),
+                  ),
+                  title: Text(nomeProduto, style: TextStyle(decoration: isFinalizado ? TextDecoration.lineThrough : null, color: isFinalizado ? Colors.grey : (isAguardando ? Colors.orange[900] : Colors.black87), fontWeight: FontWeight.bold)),
+                  subtitle: Text(isAguardando ? 'Aguardando rede...' : 'Status: ${status.toUpperCase()}', style: TextStyle(fontSize: 12, color: isAguardando ? Colors.orange[800] : Colors.grey[600], fontStyle: isAguardando ? FontStyle.italic : FontStyle.normal)),
+                  trailing: Text('R\$ ${preco.toStringAsFixed(2)}', style: TextStyle(color: isFinalizado ? Colors.grey : (isAguardando ? Colors.orange[900] : Colors.green[800]), fontWeight: FontWeight.bold, fontSize: 16)),
+                ),
               ),
-              title: Text(nomeProduto, style: TextStyle(decoration: isFinalizado ? TextDecoration.lineThrough : null, color: isFinalizado ? Colors.grey : (isAguardando ? Colors.orange[900] : Colors.black87), fontWeight: FontWeight.bold)),
-              subtitle: Text(isAguardando ? 'Aguardando rede...' : 'Status: ${status.toUpperCase()}', style: TextStyle(fontSize: 12, color: isAguardando ? Colors.orange[800] : Colors.grey[600], fontStyle: isAguardando ? FontStyle.italic : FontStyle.normal)),
-              trailing: Text('R\$ ${preco.toStringAsFixed(2)}', style: TextStyle(color: isFinalizado ? Colors.grey : (isAguardando ? Colors.orange[900] : Colors.green[800]), fontWeight: FontWeight.bold, fontSize: 16)),
-            ),
-          ),
-        );
-      },
-    );
+            );
+          },
+        ),
+      ),
+    ],
+  );
   }
 }
