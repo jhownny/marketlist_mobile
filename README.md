@@ -51,19 +51,10 @@ O objetivo é oferecer uma experiência nativa, rápida e fluida, mantendo a int
 - [x] **Indicadores Visuais:** Diferenciação clara entre itens pendentes e comprados (check/riscado).
 - [x] **Segurança:** Comunicação via API Key (Header `x-api-key`) e HTTPS.
 - [x] **Modo Offline:** Cache local para ver a lista sem internet.
-- [x] **Gestão de Grupos:** Alternar e editar diferentes listas de compras.
-- [x] **Histórico de Listas:** Manter um histórico de listas anteriores para comparação.
-- [x] **Verificação de Email:** Mandar um codigo de verificação para confirmar a existencia do email.
+- [x] **Gestão de Grupos:** (Em breve) Alternar e editar diferentes listas de compras.
+- [x] **Histórico de Listas:** (Em breve) Manter um histórico de listas anteriores para comparação.
+- [x] **Verificação de Email:** (Em breve) Mandar um codigo de verificação para confirmar a existencia do email.
 
-### ⏳ Metas Futuras (Roadmap)
-- [ ] **Recuperação de Senha:** Fluxo de "Esqueci minha senha" com validação segura via código OTP temporário enviado ao e-mail.
-- [ ] **Exclusão de Conta (LGPD/GDPR):** Opção nativa para o usuário apagar permanentemente sua conta e rastros de dados no banco, atendendo às políticas de privacidade.
-- [ ] **Compartilhamento de Recibo:** Exportar o comprovante de compras finalizadas para envio via WhatsApp e outros apps.
-- [ ] **Dashboard Financeiro:** Aba de estatísticas com gráficos visuais detalhando os gastos totais do usuário por mês e por grupos de compras.
-- [ ] **Orçamento por Lista:** Definir um limite de gastos para o grupo e acompanhar o saldo (positivo ou negativo) em tempo real.
-- [ ] **Listas Compartilhadas:** Permitir que contas diferentes gerenciem e editem o mesmo grupo de compras de forma colaborativa.
-
-      
 ---
 <div id="tecnologias"></div>
 

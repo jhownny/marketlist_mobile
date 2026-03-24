@@ -98,7 +98,7 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
             }
           });
 
-          _paginaAtual++; // Prepara para pedir a próxima página na próxima rolagem
+          _paginaAtual++;
           _carregandoInicial = false;
           _carregandoMais = false;
         });
@@ -131,8 +131,11 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final onBackgroundColor = theme.colorScheme.onBackground;
+
     return Scaffold(
-      backgroundColor: Colors.grey[200],
+      backgroundColor: theme.scaffoldBackgroundColor, // Fundo adaptável
       appBar: AppBar(
         title: Text('Histórico: ${widget.nomeGrupo}', style: const TextStyle(fontSize: 18)),
         backgroundColor: Colors.green,
@@ -147,20 +150,18 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.receipt_long, size: 80, color: Colors.grey[400]),
+                          Icon(Icons.receipt_long, size: 80, color: onBackgroundColor.withOpacity(0.3)), // Ícone adaptável
                           const SizedBox(height: 10),
-                          Text('Nenhuma compra finalizada aqui.', style: TextStyle(color: Colors.grey[600], fontSize: 16)),
+                          Text('Nenhuma compra finalizada aqui.', style: TextStyle(color: onBackgroundColor.withOpacity(0.6), fontSize: 16)), // Texto adaptável
                         ],
                       ),
                     )
                   : ListView.builder(
-                      controller: _scrollController, // Vinculando o sensor à lista
+                      controller: _scrollController,
                       padding: const EdgeInsets.all(16),
-                      // Adiciona 1 item extra no final se estiver carregando mais (para mostrar a bolinha girando)
                       itemCount: _comprasAgrupadas.length + (_carregandoMais ? 1 : 0),
                       itemBuilder: (context, index) {
                         
-                        // Se chegou no item extra do final, desenha o indicador de carregamento
                         if (index == _comprasAgrupadas.length) {
                           return const Padding(
                             padding: EdgeInsets.symmetric(vertical: 20.0),
@@ -176,19 +177,23 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
                           totalCompra += double.tryParse(item['preco'].toString()) ?? 0.0;
                         }
 
-                        return _construirCupomFiscal(dataOriginal, itensDestaCompra, totalCompra);
+                        return _construirCupomFiscal(context, dataOriginal, itensDestaCompra, totalCompra);
                       },
                     ),
     );
   }
 
-  Widget _construirCupomFiscal(String data, List<dynamic> itens, double total) {
+  Widget _construirCupomFiscal(BuildContext context, String data, List<dynamic> itens, double total) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final paperColor = isDark ? const Color(0xFF1E1E1E) : const Color(0xFFFDFBF7);
+    final textColor = isDark ? Colors.grey[300] : Colors.black87;
+    final mutedColor = isDark ? Colors.grey[600] : Colors.grey;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 24),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFFDFBF7),
+        color: paperColor,
         boxShadow: [
           BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 5, offset: const Offset(0, 3)),
         ],
@@ -197,23 +202,22 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Center(child: Text('MARKETLIST S/A', style: TextStyle(fontFamily: 'Courier', fontSize: 16, fontWeight: FontWeight.bold))),
-          const Center(child: Text('CUPOM FISCAL NÃO OFICIAL', style: TextStyle(fontFamily: 'Courier', fontSize: 12))),
+          Center(child: Text('MARKETLIST S/A', style: TextStyle(fontFamily: 'Courier', fontSize: 16, fontWeight: FontWeight.bold, color: textColor))),
+          Center(child: Text('CUPOM FISCAL NÃO OFICIAL', style: TextStyle(fontFamily: 'Courier', fontSize: 12, color: textColor))),
           const SizedBox(height: 10),
-          Text('DATA: ${_formatarData(data)}', style: const TextStyle(fontFamily: 'Courier', fontSize: 12)),
+          Text('DATA: ${_formatarData(data)}', style: TextStyle(fontFamily: 'Courier', fontSize: 12, color: textColor)),
           const SizedBox(height: 10),
-          const Text('----------------------------------------', style: TextStyle(fontFamily: 'Courier', fontSize: 12, color: Colors.grey)),
-          const Row(
+          Text('----------------------------------------', style: TextStyle(fontFamily: 'Courier', fontSize: 12, color: mutedColor)),
+          Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('PRODUTO', style: TextStyle(fontFamily: 'Courier', fontSize: 12, fontWeight: FontWeight.bold)),
-              Text('VALOR', style: TextStyle(fontFamily: 'Courier', fontSize: 12, fontWeight: FontWeight.bold)),
+              Text('PRODUTO', style: TextStyle(fontFamily: 'Courier', fontSize: 12, fontWeight: FontWeight.bold, color: textColor)),
+              Text('VALOR', style: TextStyle(fontFamily: 'Courier', fontSize: 12, fontWeight: FontWeight.bold, color: textColor)),
             ],
           ),
-          const Text('----------------------------------------', style: TextStyle(fontFamily: 'Courier', fontSize: 12, color: Colors.grey)),
+          Text('----------------------------------------', style: TextStyle(fontFamily: 'Courier', fontSize: 12, color: mutedColor)),
           const SizedBox(height: 5),
           
-          // Lista de itens do cupom
           ...itens.map((item) {
             String nome = item['produto'] ?? 'Item';
             double preco = double.tryParse(item['preco'].toString()) ?? 0.0;
@@ -222,46 +226,45 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 2.0),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end, // Alinha tudo pela base
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  // 1. O Nome do Produto
-                  Text(nome.toUpperCase(), style: const TextStyle(fontFamily: 'Courier', fontSize: 12)),
-                  
-                  // 2. O Preenchimento Matemático
-                  _construirPontilhado(),
-                  
-                  // 3. O Valor
-                  Text('R\$ ${preco.toStringAsFixed(2)}', style: const TextStyle(fontFamily: 'Courier', fontSize: 12)),
+                  Text(nome.toUpperCase(), style: TextStyle(fontFamily: 'Courier', fontSize: 12, color: textColor)),
+                  _construirPontilhado(context),
+                  Text('R\$ ${preco.toStringAsFixed(2)}', style: TextStyle(fontFamily: 'Courier', fontSize: 12, color: textColor)),
                 ],
               ),
             );
           }),
           
           const SizedBox(height: 5),
-          const Text('----------------------------------------', style: TextStyle(fontFamily: 'Courier', fontSize: 12, color: Colors.grey)),
+          Text('----------------------------------------', style: TextStyle(fontFamily: 'Courier', fontSize: 12, color: mutedColor)),
           const SizedBox(height: 5),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('TOTAL:', style: TextStyle(fontFamily: 'Courier', fontSize: 16, fontWeight: FontWeight.bold)),
-              Text('R\$ ${total.toStringAsFixed(2)}', style: const TextStyle(fontFamily: 'Courier', fontSize: 16, fontWeight: FontWeight.bold)),
+              Text('TOTAL:', style: TextStyle(fontFamily: 'Courier', fontSize: 16, fontWeight: FontWeight.bold, color: textColor)),
+              Text('R\$ ${total.toStringAsFixed(2)}', style: TextStyle(fontFamily: 'Courier', fontSize: 16, fontWeight: FontWeight.bold, color: textColor)),
             ],
           ),
           const SizedBox(height: 20),
-          const Center(child: Text('VOLTE SEMPRE!', style: TextStyle(fontFamily: 'Courier', fontSize: 12))),
-          const Center(child: Text('***', style: TextStyle(fontFamily: 'Courier', fontSize: 12))),
+          Center(child: Text('VOLTE SEMPRE!', style: TextStyle(fontFamily: 'Courier', fontSize: 12, color: textColor))),
+          Center(child: Text('***', style: TextStyle(fontFamily: 'Courier', fontSize: 12, color: textColor))),
         ],
       ),
     );
   }
 
-  Widget _construirPontilhado() {
+  Widget _construirPontilhado(BuildContext context) {
+    // Se for modo escuro os pontinhos ficam mais escuros
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final dotColor = isDark ? Colors.grey[700] : Colors.grey[400];
+
     return Expanded(
       child: LayoutBuilder(
         builder: (context, constraints) {
           final boxWidth = constraints.constrainWidth();
-          const dashWidth = 2.0; // Tamanho de cada pontinho
-          const dashSpace = 4.0; // Espaço entre os pontinhos
+          const dashWidth = 2.0; 
+          const dashSpace = 4.0; 
           final dashCount = (boxWidth / (dashWidth + dashSpace)).floor();
 
           return Padding(
@@ -274,7 +277,7 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
                   width: dashWidth,
                   height: 2.0,
                   decoration: BoxDecoration(
-                    color: Colors.grey[400],
+                    color: dotColor,
                     shape: BoxShape.circle,
                   ),
                 );
