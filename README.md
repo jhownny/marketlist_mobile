@@ -62,7 +62,6 @@ O objetivo é oferecer uma experiência nativa, rápida e fluida, mantendo a int
 
 - [ ] **Compartilhamento de Recibo:** Exportar o comprovante de compras finalizadas para envio via WhatsApp e outros apps.
 - [ ] **Dashboard Financeiro:** Aba de estatísticas com gráficos visuais detalhando os gastos totais do usuário por mês e por grupos de compras.
-
 - [ ] **Listas Compartilhadas:** Permitir que contas diferentes gerenciem e editem o mesmo grupo de compras de forma colaborativa.
 
       
