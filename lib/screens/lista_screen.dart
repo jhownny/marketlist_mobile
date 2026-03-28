@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'login_screen.dart';
 import 'historico_screen.dart';
 import 'configuracoes_screen.dart';
+import 'dashboard_screen.dart';
 
 class ListaComprasScreen extends StatefulWidget {
   const ListaComprasScreen({super.key});
@@ -62,7 +63,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
         }
       }
     } catch (e) {
-      print("Erro ao verificar atualização: $e");
+      debugPrint("Erro ao verificar atualização: $e");
     }
   }
 
@@ -87,7 +88,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
               try {
                 await launchUrl(uri, mode: LaunchMode.externalApplication);
               } catch (e) {
-                print("Erro ao abrir navegador: $e");
+                debugPrint("Erro ao abrir navegador: $e");
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
@@ -162,7 +163,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
         _fazerLogout(); // Token expirou!
       }
     } catch (e) {
-      print("Erro ao buscar grupos: $e");
+      debugPrint("Erro ao buscar grupos: $e");
     }
   }
 
@@ -363,7 +364,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
         await _buscarGruposDaApi();
       }
     } catch (e) {
-      print("Erro ao editar grupo: $e");
+      debugPrint("Erro ao editar grupo: $e");
     }
   }
 
@@ -396,14 +397,14 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
           // Se o usuário apagou o grupo que ele estava lendo, move ele pro primeiro da lista (ou zera tudo)
           if (_grupoId == idGrupo) {
             if (_listaGruposApi.isNotEmpty) {
-              _trocarGrupo(int.parse(_listaGruposApi[0]['id'].toString()), _listaGruposApi[0]['nome'], _listaGruposApi[0]['orcamento']);
+              _trocarGrupo(int.parse(_listaGruposApi[0]['id'].toString()), _listaGruposApi[0]['nome'], double.tryParse(_listaGruposApi[0]['orcamento']?.toString() ?? '0') ?? 0.0);
             } else {
               setState(() { _grupoId = 0; _nomeGrupoAtual = 'Sem Grupos'; _itens = []; });
             }
           }
         }
       } catch (e) {
-        print("Erro ao deletar grupo: $e");
+        debugPrint("Erro ao deletar grupo: $e");
       }
     }
   }
@@ -745,13 +746,12 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
   }
 
   Widget _construirBarraOrcamento() {
-    if (_orcamentoAtual <= 0) return const SizedBox.shrink(); // Esconde se não tiver orçamento
+    if (_orcamentoAtual <= 0) return const SizedBox.shrink(); 
 
-    double totalAtual = _calcularTotalParcial(); // Puxa o total sozinho
+    double totalAtual = _calcularTotalParcial(); 
     double percentagem = totalAtual / _orcamentoAtual;
     bool estourou = percentagem > 1.0;
     
-    // Limita a barra visualmente a 100% (1.0) para ela não "vazar" da tela
     double percentagemBarra = percentagem > 1.0 ? 1.0 : percentagem;
 
     return Container(
@@ -790,142 +790,57 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final temItensPendentes = _itens.any((i) => i['status'] == 'pendente' || i['status'] == 'aguardando_sync');
+  Widget _buildEmptyState(String nomeGrupo, ThemeData theme) {
+    final onBackgroundColor = theme.colorScheme.onBackground;
+    final surfaceColor = theme.colorScheme.surface;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text(_nomeGrupoAtual, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                if (_modoOffline) ...[const SizedBox(width: 8), const Icon(Icons.cloud_off, size: 16, color: Colors.yellow)]
+    return Center(
+      child: ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(40),
+            decoration: BoxDecoration(
+              color: surfaceColor,
+              borderRadius: BorderRadius.circular(30),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(theme.brightness == Brightness.dark ? 0.2 : 0.04),
+                  blurRadius: 15,
+                  offset: const Offset(0, 5),
+                )
               ],
             ),
-            Text('Olá, $_nomeUsuarioAtual', style: const TextStyle(fontSize: 12, color: Colors.white70)),
-          ],
-        ),
-        backgroundColor: Colors.green,
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.receipt_long),
-            tooltip: 'Ver Histórico',
-            onPressed: () {
-              if (_grupoId != 0) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => HistoricoScreen(grupoId: _grupoId, nomeGrupo: _nomeGrupoAtual),
-                  ),
-                );
-              }
-            },
+            child: Column(
+              children: [
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 1.0, end: 1.1),
+                  duration: const Duration(seconds: 2),
+                  curve: Curves.easeInOut,
+                  builder: (context, scale, child) {
+                    return Transform.scale(scale: scale, child: child);
+                  },
+                  child: Icon(Icons.add_shopping_cart_outlined, size: 80, color: Colors.green.withOpacity(0.5)),
+                ),
+                const SizedBox(height: 30),
+                Text(
+                  'Sua lista "$nomeGrupo" está vazia!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: onBackgroundColor),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Clique no botão verde (+) para adicionar os itens que você quer comprar.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 14, color: onBackgroundColor.withOpacity(0.6)),
+                ),
+              ],
+            ),
           ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () async { 
-              await _buscarGruposDaApi();
-              await buscarItens(); 
-            },
-          )
+          const SizedBox(height: 100), 
         ],
       ),
-      drawer: Drawer(
-        child: SafeArea(
-          child: Column(
-            children: [
-              Expanded(
-                child: ListView(
-                  padding: EdgeInsets.zero,
-                  children: [
-                    UserAccountsDrawerHeader(
-                      decoration: const BoxDecoration(color: Colors.green),
-                      accountName: Text(_nomeUsuarioAtual, style: const TextStyle(fontSize: 18)),
-                      accountEmail: const Text('MarketList User'),
-                      currentAccountPicture: const CircleAvatar(backgroundColor: Colors.white, child: Icon(Icons.person, color: Colors.green, size: 40)),
-                    ),
-                    if (_listaGruposApi.isEmpty) const ListTile(title: Text('Nenhum grupo encontrado.')),
-                    // Renderiza os grupos existentes
-                    ..._listaGruposApi.map((grupo) {
-                      final idGrupo = int.parse(grupo['id'].toString());
-                      return ListTile(
-                        leading: const Icon(Icons.list_alt),
-                        title: Text(grupo['nome']),
-                        selected: _grupoId == idGrupo,
-                        selectedColor: Colors.green,
-                        onTap: () {
-                          Navigator.pop(context); 
-                          double orc = double.tryParse(grupo['orcamento']?.toString() ?? '0') ?? 0.0;
-                          _trocarGrupo(idGrupo, grupo['nome'], orc);
-                        },
-                        trailing: IconButton(
-                          icon: const Icon(Icons.more_vert, size: 20, color: Colors.grey),
-                          onPressed: () {
-                            Navigator.pop(context); // Fecha o drawer lateral
-                            _exibirOpcoesGrupo(idGrupo, grupo['nome']); // Abre o menu inferior
-                          },
-                        ),
-                      );
-                    }),
-                    const Divider(),
-                    ListTile(
-                      leading: const Icon(Icons.add_circle_outline, color: Colors.green),
-                      title: const Text('Criar Novo Grupo', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                      onTap: () {
-                        Navigator.pop(context); // Fecha o menu lateral
-                        _exibirDialogoNovoGrupo(); // Abre o Pop-up
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(),
-                ListTile(
-                    leading: const Icon(Icons.settings),
-                    title: const Text('Configurações'),
-                    onTap: () {
-                      Navigator.pop(context); // Fecha o menu lateral
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const ConfiguracoesScreen()),
-                      );
-                    },
-                ),
-            ],
-          ),
-        ),
-      ),
-      body: _buildBody(),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _exibirDialogoAdicionar,
-        backgroundColor: Colors.green,
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
-      bottomNavigationBar: temItensPendentes && !_carregando
-          ? BottomAppBar(
-              color: Colors.white,
-              elevation: 10,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Total: R\$ ${_calcularTotalParcial().toStringAsFixed(2)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
-                    ElevatedButton.icon(
-                      onPressed: _modoOffline ? null : _finalizarLista,
-                      icon: const Icon(Icons.check_circle),
-                      label: const Text('Finalizar'),
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          : null,
     );
   }
 
@@ -950,68 +865,364 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
     }
 
     if (_itens.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.shopping_basket_outlined, size: 80, color: Colors.grey[300]),
-            const SizedBox(height: 10),
-            Text('A lista "$_nomeGrupoAtual" está vazia!', style: TextStyle(color: Colors.grey[600], fontSize: 18)),
-          ],
-        ),
-      );
+      return _buildEmptyState(_nomeGrupoAtual, Theme.of(context));
     }
 
     return Column(
-    children: [
-      _construirBarraOrcamento(),
-      
-      Expanded(
-        child: ListView.builder(
-          itemCount: _itens.length,
-          padding: const EdgeInsets.all(8),
-          itemBuilder: (context, index) {
-            final item = _itens[index];
-            final nomeProduto = item['produto'] ?? 'Produto sem nome';
-            final preco = double.tryParse(item['preco'].toString()) ?? 0.0;
-            final status = item['status'] ?? 'pendente';
-            
-            final isFinalizado = status == 'finalizado';
-            final isAguardando = status == 'aguardando_sync';
+      children: [
+        _construirBarraOrcamento(),
+        
+        Expanded(
+          child: ListView.builder(
+            itemCount: _itens.length,
+            padding: const EdgeInsets.all(8),
+            itemBuilder: (context, index) {
+              final item = _itens[index];
+              final nomeProduto = item['produto'] ?? 'Produto sem nome';
+              final preco = double.tryParse(item['preco'].toString()) ?? 0.0;
+              final status = item['status'] ?? 'pendente';
+              
+              final isFinalizado = status == 'finalizado';
+              final isAguardando = status == 'aguardando_sync';
 
-            return Dismissible(
-              key: ValueKey(item['id'] ?? UniqueKey().toString()), 
-              direction: (isFinalizado || isAguardando) ? DismissDirection.none : DismissDirection.horizontal,
-              background: Container(color: Colors.blue, alignment: Alignment.centerLeft, padding: const EdgeInsets.symmetric(horizontal: 20), child: const Icon(Icons.edit, color: Colors.white, size: 30)),
-              secondaryBackground: Container(color: Colors.red, alignment: Alignment.centerRight, padding: const EdgeInsets.symmetric(horizontal: 20), child: const Icon(Icons.delete, color: Colors.white, size: 30)),
-              confirmDismiss: (direction) async {
-                if (direction == DismissDirection.startToEnd) {
-                  _exibirDialogoEditar(item); return false; 
-                } else if (direction == DismissDirection.endToStart) {
-                  return await _confirmarExclusao(item); 
-                }
-                return false;
-              },
-              child: Card(
-                elevation: isAguardando ? 0 : 2,
-                color: isFinalizado ? Colors.grey[100] : (isAguardando ? Colors.orange[50] : Colors.white),
-                margin: const EdgeInsets.symmetric(vertical: 5),
-                shape: isAguardando ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: Colors.orange.shade300, width: 1)) : RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: isFinalizado ? Colors.grey : (isAguardando ? Colors.orange : Colors.green),
-                    child: Icon(isFinalizado ? Icons.check : (isAguardando ? Icons.access_time : Icons.shopping_cart), color: Colors.white, size: 20),
+              return Dismissible(
+                key: ValueKey(item['id'] ?? UniqueKey().toString()), 
+                direction: (isFinalizado || isAguardando) ? DismissDirection.none : DismissDirection.horizontal,
+                background: Container(color: Colors.blue, alignment: Alignment.centerLeft, padding: const EdgeInsets.symmetric(horizontal: 20), child: const Icon(Icons.edit, color: Colors.white, size: 30)),
+                secondaryBackground: Container(color: Colors.red, alignment: Alignment.centerRight, padding: const EdgeInsets.symmetric(horizontal: 20), child: const Icon(Icons.delete, color: Colors.white, size: 30)),
+                confirmDismiss: (direction) async {
+                  if (direction == DismissDirection.startToEnd) {
+                    _exibirDialogoEditar(item); return false; 
+                  } else if (direction == DismissDirection.endToStart) {
+                    return await _confirmarExclusao(item); 
+                  }
+                  return false;
+                },
+                child: Container(
+                  margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                  decoration: BoxDecoration(
+                    color: isFinalizado 
+                        ? Theme.of(context).colorScheme.surface.withOpacity(0.5) 
+                        : (isAguardando ? Colors.orange.withOpacity(0.05) : Theme.of(context).colorScheme.surface),
+                    borderRadius: BorderRadius.circular(16), 
+                    boxShadow: isAguardando ? [] : [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(Theme.of(context).brightness == Brightness.dark ? 0.2 : 0.04),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      )
+                    ],
+                    border: isAguardando ? Border.all(color: Colors.orange.shade300, width: 1) : Border.all(color: Colors.transparent),
                   ),
-                  title: Text(nomeProduto, style: TextStyle(decoration: isFinalizado ? TextDecoration.lineThrough : null, color: isFinalizado ? Colors.grey : (isAguardando ? Colors.orange[900] : Colors.black87), fontWeight: FontWeight.bold)),
-                  subtitle: Text(isAguardando ? 'Aguardando rede...' : 'Status: ${status.toUpperCase()}', style: TextStyle(fontSize: 12, color: isAguardando ? Colors.orange[800] : Colors.grey[600], fontStyle: isAguardando ? FontStyle.italic : FontStyle.normal)),
-                  trailing: Text('R\$ ${preco.toStringAsFixed(2)}', style: TextStyle(color: isFinalizado ? Colors.grey : (isAguardando ? Colors.orange[900] : Colors.green[800]), fontWeight: FontWeight.bold, fontSize: 16)),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    leading: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: isFinalizado ? Colors.grey.withOpacity(0.15) : (isAguardando ? Colors.orange.withOpacity(0.15) : Colors.green.withOpacity(0.15)),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        isFinalizado ? Icons.check : (isAguardando ? Icons.cloud_upload : Icons.shopping_bag_outlined), 
+                        color: isFinalizado ? Colors.grey : (isAguardando ? Colors.orange : Colors.green), 
+                        size: 24
+                      ),
+                    ),
+                    title: Text(
+                      nomeProduto, 
+                      style: TextStyle(
+                        decoration: isFinalizado ? TextDecoration.lineThrough : null, 
+                        color: isFinalizado ? Colors.grey : (isAguardando ? Colors.orange[900] : Theme.of(context).colorScheme.onBackground), 
+                        fontWeight: FontWeight.w700, 
+                        fontSize: 16
+                      )
+                    ),
+                    subtitle: Text(
+                      isAguardando ? 'Aguardando rede...' : 'Qtd/Peso ajustável', 
+                      style: TextStyle(fontSize: 12, color: isAguardando ? Colors.orange[800] : Colors.grey[500], fontStyle: isAguardando ? FontStyle.italic : FontStyle.normal)
+                    ),
+                    trailing: Text(
+                      'R\$ ${preco.toStringAsFixed(2)}', 
+                      style: TextStyle(
+                        color: isFinalizado ? Colors.grey : (isAguardando ? Colors.orange[900] : Colors.green), 
+                        fontWeight: FontWeight.w900, 
+                        fontSize: 17
+                      )
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final temItensPendentes = _itens.any((i) => i['status'] == 'pendente' || i['status'] == 'aguardando_sync');
+
+    return Scaffold(
+      appBar: AppBar(
+        toolbarHeight: 80,
+        elevation: 8, // Sombra suave
+        shadowColor: Colors.black.withOpacity(0.4), 
+        backgroundColor: Colors.green.shade600,
+        foregroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            bottom: Radius.circular(30),
+          ),
+        ),
+        title: Padding(
+          padding: const EdgeInsets.only(left: 4.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(_nomeGrupoAtual, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                  if (_modoOffline) ...[const SizedBox(width: 8), const Icon(Icons.cloud_off, size: 18, color: Colors.yellowAccent)]
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text('Olá, $_nomeUsuarioAtual', style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.85), fontWeight: FontWeight.w500)),
+            ],
+          ),
+        ),
+        actions: [
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 18),
+            decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
+            child: IconButton(
+              icon: const Icon(Icons.receipt_long, size: 20),
+              tooltip: 'Ver Histórico',
+              onPressed: () {
+                if (_grupoId != 0) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => HistoricoScreen(grupoId: _grupoId, nomeGrupo: _nomeGrupoAtual),
+                    ),
+                  );
+                }
+              },
+            ),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            margin: const EdgeInsets.only(top: 18, right: 16),
+            decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
+            child: IconButton(
+              icon: const Icon(Icons.refresh, size: 20),
+              tooltip: 'Sincronizar',
+              onPressed: () async { 
+                await _buscarGruposDaApi();
+                await buscarItens(); 
+              },
+            ),
+          )
+        ],
+      ),
+      drawer: Drawer(
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        elevation: 0,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 1. CABEÇALHO CUSTOMIZADO E MODERNO
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 60, 24, 24),
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Theme.of(context).brightness == Brightness.dark 
+                    ? Colors.grey.shade900 
+                    : Colors.green.shade50,
+                border: Border(bottom: BorderSide(color: Colors.grey.withOpacity(0.1), width: 1)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    radius: 35,
+                    backgroundColor: Colors.green,
+                    child: Text(
+                      _nomeUsuarioAtual.isNotEmpty ? _nomeUsuarioAtual[0].toUpperCase() : 'U',
+                      style: const TextStyle(fontSize: 32, color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    _nomeUsuarioAtual,
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.onBackground),
+                  ),
+                  Text(
+                    'Meus Grupos de Compras',
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            Expanded(
+              child: _listaGruposApi.isEmpty 
+                ? Center(child: Text('Nenhum grupo encontrado.', style: TextStyle(color: Colors.grey.shade500)))
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    itemCount: _listaGruposApi.length,
+                    itemBuilder: (context, index) {
+                      final grupo = _listaGruposApi[index];
+                      final idGrupo = int.parse(grupo['id'].toString());
+                      final isSelected = _grupoId == idGrupo;
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 6),
+                        decoration: BoxDecoration(
+                          color: isSelected ? Colors.green.withOpacity(0.12) : Colors.transparent,
+                          borderRadius: BorderRadius.circular(30), 
+                        ),
+                        child: ListTile(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                          leading: Icon(
+                            isSelected ? Icons.folder : Icons.folder_outlined,
+                            color: isSelected ? Colors.green : Colors.grey.shade600,
+                          ),
+                          title: Text(
+                            grupo['nome'],
+                            style: TextStyle(
+                              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                              color: isSelected ? Colors.green.shade700 : Theme.of(context).colorScheme.onBackground,
+                            ),
+                          ),
+                          trailing: IconButton(
+                            icon: Icon(Icons.more_vert, size: 20, color: isSelected ? Colors.green.shade700 : Colors.grey.shade400),
+                            onPressed: () {
+                              Navigator.pop(context);
+                              _exibirOpcoesGrupo(idGrupo, grupo['nome']);
+                            },
+                          ),
+                          onTap: () {
+                            Navigator.pop(context); 
+                            double orc = double.tryParse(grupo['orcamento']?.toString() ?? '0') ?? 0.0;
+                            _trocarGrupo(idGrupo, grupo['nome'], orc);
+                          },
+                        ),
+                      );
+                    },
+                  ),
+            ),
+            
+            Container(
+              padding: const EdgeInsets.all(16.0),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, -5))],
+              ),
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Botão Destacado de Novo Grupo
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _exibirDialogoNovoGrupo();
+                      },
+                      icon: const Icon(Icons.add_circle_outline),
+                      label: const Text('Criar Novo Grupo', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.green,
+                        side: BorderSide(color: Colors.green.shade300, width: 2),
+                        minimumSize: const Size(double.infinity, 50),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // Dashboard
+                    ListTile(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      leading: const Icon(Icons.pie_chart_outline, color: Colors.blue),
+                      title: const Text('Dashboard', style: TextStyle(fontWeight: FontWeight.w600)),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => const DashboardScreen()));
+                      },
+                    ),
+                    
+                    // Configurações
+                    ListTile(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      leading: const Icon(Icons.settings_outlined),
+                      title: const Text('Configurações', style: TextStyle(fontWeight: FontWeight.w600)),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => const ConfiguracoesScreen()));
+                      },
+                    ),
+                  ],
                 ),
               ),
-            );
-          },
+            ),
+          ],
         ),
       ),
-    ],
-  );
+      body: _buildBody(),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _exibirDialogoAdicionar,
+        backgroundColor: Colors.green,
+        child: const Icon(Icons.add, color: Colors.white),
+      ),
+      bottomNavigationBar: temItensPendentes && !_carregando
+          ? SafeArea(
+              child: Container(
+                margin: const EdgeInsets.only(left: 16.0, right: 16.0, bottom: 16.0), 
+                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(25), 
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(Theme.of(context).brightness == Brightness.dark ? 0.3 : 0.08),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
+                    )
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Total Pendente', style: TextStyle(fontSize: 12, color: Colors.grey[500], fontWeight: FontWeight.w600)),
+                        Text(
+                          'R\$ ${_calcularTotalParcial().toStringAsFixed(2)}', 
+                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.green),
+                        ),
+                      ],
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: _modoOffline ? null : _finalizarLista,
+                      icon: const Icon(Icons.check_circle),
+                      label: const Text('Finalizar', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green, 
+                        foregroundColor: Colors.white, 
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        elevation: 0, 
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : null,
+    );
   }
 }

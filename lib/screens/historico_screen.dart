@@ -135,11 +135,22 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
     final onBackgroundColor = theme.colorScheme.onBackground;
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor, // Fundo adaptável
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text('Histórico: ${widget.nomeGrupo}', style: const TextStyle(fontSize: 18)),
-        backgroundColor: Colors.green,
+        toolbarHeight: 80,
+        elevation: 8, 
+        shadowColor: Colors.black.withOpacity(0.4), 
+        backgroundColor: Colors.green.shade600, 
         foregroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            bottom: Radius.circular(30),
+          ),
+        ),
+        title: Text(
+          'Histórico: ${widget.nomeGrupo}', // Presumindo que sua variável chame widget.nomeGrupo
+          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+        ),
       ),
       body: _carregandoInicial
           ? const Center(child: CircularProgressIndicator())
