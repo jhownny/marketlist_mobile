@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'login_screen.dart';
-import '../main.dart';
+
+// 1. IMPORTAÇÃO PARA PEGAR O TEMA GLOBAL (MAIN)
+import '../main.dart'; 
 
 class ConfiguracoesScreen extends StatefulWidget {
   const ConfiguracoesScreen({super.key});
@@ -14,265 +16,309 @@ class ConfiguracoesScreen extends StatefulWidget {
 }
 
 class _ConfiguracoesScreenState extends State<ConfiguracoesScreen> {
-  // Variáveis para o formulário de senha
-  final _senhaAtualController = TextEditingController();
-  final _novaSenhaController = TextEditingController();
-  bool _ocultarSenha = true;
-  bool _carregandoSenha = false;
+  bool _isDarkMode = false;
+  String _nomeUsuario = "Usuário";
+  String _emailUsuario = "Carregando...";
 
-  Future<Map<String, String>> _headersAuth() async {
+  @override
+  void initState() {
+    super.initState();
+    _carregarDadosLocais();
+  }
+
+  Future<void> _carregarDadosLocais() async {
     final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('jwt_token') ?? '';
-    final apiKey = dotenv.env['API_KEY'] ?? '';
-    return {'Content-Type': 'application/json', 'x-api-key': apiKey, 'Authorization': 'Bearer $token'};
+    setState(() {
+      _nomeUsuario = prefs.getString('usuario_nome') ?? 'Usuário';
+      _emailUsuario = prefs.getString('usuario_email') ?? 'marketlist@app.com';
+      
+      // 2. LÊ O ESTADO ATUAL DIRETO DO NOSSO AVISADOR GLOBAL
+      _isDarkMode = themeNotifier.value == ThemeMode.dark; 
+    });
   }
 
-  // =======================================
-  // LÓGICA DE MUDAR SENHA (NOVA)
-  // =======================================
-  void _exibirDialogoMudarSenha() {
-    _senhaAtualController.clear();
-    _novaSenhaController.clear();
-    _ocultarSenha = true;
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder( // StatefulBuilder permite usar setState dentro do Dialog
-          builder: (context, setStateDialog) {
-            return AlertDialog(
-              title: const Text('Mudar Senha'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: _senhaAtualController,
-                    obscureText: _ocultarSenha,
-                    decoration: const InputDecoration(labelText: 'Senha Atual', border: OutlineInputBorder()),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _novaSenhaController,
-                    obscureText: _ocultarSenha,
-                    decoration: InputDecoration(
-                      labelText: 'Nova Senha',
-                      border: const OutlineInputBorder(),
-                      suffixIcon: IconButton(
-                        icon: Icon(_ocultarSenha ? Icons.visibility_off : Icons.visibility),
-                        onPressed: () => setStateDialog(() => _ocultarSenha = !_ocultarSenha),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
-                ElevatedButton(
-                  onPressed: _carregandoSenha ? null : () => _salvarNovaSenha(setStateDialog),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
-                  child: _carregandoSenha ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Salvar'),
-                ),
-              ],
-            );
-          }
-        );
-      },
-    );
-  }
-
-  Future<void> _salvarNovaSenha(Function setStateDialog) async {
-    final senhaAtual = _senhaAtualController.text;
-    final novaSenha = _novaSenhaController.text;
-
-    if (senhaAtual.isEmpty || novaSenha.isEmpty) return;
-
-    setStateDialog(() => _carregandoSenha = true);
-
-    try {
-      final baseUrl = dotenv.env['API_URL'] ?? '';
-      final response = await http.put(
-        Uri.parse('$baseUrl/mudar_senha'),
-        headers: await _headersAuth(),
-        body: jsonEncode({"senha_atual": senhaAtual, "nova_senha": novaSenha}),
-      );
-
-      setStateDialog(() => _carregandoSenha = false);
-
-      if (response.statusCode == 200) {
-        Navigator.pop(context); // Fecha o dialog
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Senha alterada com sucesso!'), backgroundColor: Colors.green));
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Senha atual incorreta.'), backgroundColor: Colors.red));
-      }
-    } catch (e) {
-      setStateDialog(() => _carregandoSenha = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erro ao conectar ao servidor.'), backgroundColor: Colors.red));
-    }
-  }
-
-  // Lógica de Sair (Logout)
+  // ==========================================
+  // LÓGICA DE API E AÇÕES (MANTIDA IGUAL)
+  // ==========================================
   Future<void> _fazerLogout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
-    if (mounted) Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const LoginScreen()), (route) => false);
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const LoginScreen()), (route) => false);
   }
 
-  // Lógica de Excluir Conta (LGPD)
-  Future<void> _excluirConta() async {
-    // 1. O Alerta de Confirmação (Double Opt-in)
+  Future<void> _confirmarExclusaoConta() async {
     bool? confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.red),
-            SizedBox(width: 8),
-            Text('Atenção!', style: TextStyle(color: Colors.red)),
-          ],
-        ),
-        content: const Text(
-          'Tem certeza que deseja apagar sua conta?\n\n'
-          'Isso apagará TODOS os seus grupos, itens e histórico de compras permanentemente. '
-          'Essa ação NÃO pode ser desfeita.',
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(children: [Icon(Icons.warning_amber_rounded, color: Colors.red, size: 30), SizedBox(width: 10), Text('Excluir Conta?', style: TextStyle(color: Colors.red))]),
+        content: const Text('Esta ação é irreversível.\n\nTodos os seus dados serão apagados permanentemente.', style: TextStyle(fontSize: 16)),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false), 
-            child: const Text('Cancelar', style: TextStyle(color: Colors.grey))
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-            child: const Text('Excluir Definitivamente'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), child: const Text('Sim, Excluir')),
         ],
       ),
     );
+    if (confirmar == true) _excluirContaNaApi();
+  }
 
-    // 2. Se o usuário confirmou, chama a API
-    if (confirmar == true) {
-      try {
-        final baseUrl = dotenv.env['API_URL'] ?? '';
-        final response = await http.delete(
-          Uri.parse('$baseUrl/conta'),
-          headers: await _headersAuth(), // Envia o Token de segurança!
-        );
+  Future<void> _excluirContaNaApi() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final tokenJwt = prefs.getString('jwt_token') ?? '';
+      final baseUrl = dotenv.env['API_URL'] ?? '';
 
-        if (response.statusCode == 200) {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.clear();
-          
-          if (mounted) {
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(builder: (context) => const LoginScreen()),
-              (route) => false,
-            );
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Sua conta foi excluída com sucesso.'), backgroundColor: Colors.grey
-            ));
-          }
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Erro ao excluir conta. Tente novamente.'), backgroundColor: Colors.red
-          ));
-        }
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Erro de conexão com o servidor.'), backgroundColor: Colors.red
-        ));
+      showDialog(context: context, barrierDismissible: false, builder: (context) => const Center(child: CircularProgressIndicator(color: Colors.red)));
+
+      final response = await http.delete(
+        Uri.parse('$baseUrl/conta'),
+        headers: {'x-api-key': dotenv.env['API_KEY'] ?? '', 'Authorization': 'Bearer $tokenJwt'},
+      );
+      if (!mounted) return; 
+
+      Navigator.pop(context);
+      if (response.statusCode == 200) {
+        _fazerLogout();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erro ao excluir conta.'), backgroundColor: Colors.red));
       }
+    } catch (e) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sem conexão.'), backgroundColor: Colors.red));
     }
+  }
+
+  void _exibirDialogoMudarSenha() {
+    final senhaAtualController = TextEditingController();
+    final novaSenhaController = TextEditingController();
+    bool obscureAtual = true;
+    bool obscureNova = true;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Alterar Senha'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: senhaAtualController,
+                obscureText: obscureAtual,
+                decoration: InputDecoration(
+                  labelText: 'Senha Atual',
+                  prefixIcon: const Icon(Icons.lock_outline),
+                  suffixIcon: IconButton(icon: Icon(obscureAtual ? Icons.visibility_off : Icons.visibility), onPressed: () => setDialogState(() => obscureAtual = !obscureAtual)),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 15),
+              TextField(
+                controller: novaSenhaController,
+                obscureText: obscureNova,
+                decoration: InputDecoration(
+                  labelText: 'Nova Senha',
+                  prefixIcon: const Icon(Icons.lock_reset),
+                  suffixIcon: IconButton(icon: Icon(obscureNova ? Icons.visibility_off : Icons.visibility), onPressed: () => setDialogState(() => obscureNova = !obscureNova)),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
+            ElevatedButton(onPressed: () { Navigator.pop(context); _mudarSenhaNaApi(senhaAtualController.text, novaSenhaController.text); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), child: const Text('Salvar')),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _mudarSenhaNaApi(String atual, String nova) async {
+    if (atual.isEmpty || nova.isEmpty) return;
+    
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final baseUrl = dotenv.env['API_URL'] ?? '';
+      final tokenJwt = prefs.getString('jwt_token') ?? '';
+
+      final response = await http.put(
+        Uri.parse('$baseUrl/mudar_senha'),
+        headers: {
+          'Content-Type': 'application/json', 
+          'x-api-key': dotenv.env['API_KEY'] ?? '', 
+          'Authorization': 'Bearer $tokenJwt'
+        },
+        body: jsonEncode({"senha_atual": atual, "nova_senha": nova}),
+      );
+
+      // O famoso guarda-costas! Evita o aviso amarelo e protege o app de fechar sozinho
+      if (!mounted) return;
+
+      final dados = jsonDecode(response.body);
+      
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(dados['status'] ?? 'Senha alterada!'), backgroundColor: Colors.green));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(dados['erro'] ?? 'Erro ao alterar senha'), backgroundColor: Colors.red));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sem conexão com o servidor.'), backgroundColor: Colors.red));
+    }
+  }
+
+  // ==========================================
+  // CONSTRUÇÃO DA UI (CORREÇÃO DE ÍCONES)
+  // ==========================================
+  Widget _buildConfigCard({required List<Widget> children}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 24),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:Theme.of(context).brightness == Brightness.dark ? 0.2 : 0.05), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
+      child: Column(children: children),
+    );
+  }
+
+  Widget _buildNeutralIconContainer(IconData icon, {Color? color}) {
+    final onBackgroundColor = Theme.of(context).colorScheme.onSurface;
+    
+    return Container(
+      width: 42,  // Largura fixa exata
+      height: 42, // Altura fixa exata
+      decoration: BoxDecoration(
+        color: onBackgroundColor.withValues(alpha:0.06),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Center(
+        child: Icon(icon, color: color ?? onBackgroundColor.withValues(alpha:0.7), size: 22),
+      ),
+    );
+  }
+  // ==========================================
+  // O NOSSO NOVO BOTÃO ANIMADO SOL/LUA (CORREÇÃO LENTIDÃO)
+  // ==========================================
+  Widget _buildAnimatedToggle() {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _isDarkMode = !_isDarkMode;
+        });
+        
+
+        Future.delayed(const Duration(milliseconds: 250), () {
+          themeNotifier.value = _isDarkMode ? ThemeMode.dark : ThemeMode.light;
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 350), 
+        curve: Curves.easeInOut,
+        width: 75,
+        height: 40,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(40),
+          color: _isDarkMode ? Colors.indigo.shade900 : Colors.lightBlue.shade300,
+          boxShadow: [
+            BoxShadow(
+              color: (_isDarkMode ? Colors.indigo : Colors.lightBlue).withValues(alpha:0.4),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            )
+          ]
+        ),
+        child: AnimatedAlign(
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeInOut,
+          alignment: _isDarkMode ? Alignment.centerRight : Alignment.centerLeft,
+          child: Padding(
+            padding: const EdgeInsets.all(4.0),
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 350),
+                transitionBuilder: (child, animation) => RotationTransition(turns: animation, child: child),
+                child: _isDarkMode
+                    ? const Icon(Icons.nightlight_round, color: Colors.indigo, size: 20, key: ValueKey('moon'))
+                    : const Icon(Icons.wb_sunny_rounded, color: Colors.orange, size: 20, key: ValueKey('sun')),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Configurações', style: TextStyle(fontSize: 18))),
+      backgroundColor: theme.scaffoldBackgroundColor,
+      appBar: AppBar(title: const Text('Configurações', style: TextStyle(fontWeight: FontWeight.bold)), backgroundColor: Colors.transparent, elevation: 0, foregroundColor: theme.colorScheme.onSurface, centerTitle: true),
       body: ListView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(20.0),
         children: [
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-            child: Text('Preferências', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.green)),
-          ),
-          Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          // CABEÇALHO DO PERFIL
+          Center(
             child: Column(
               children: [
-                ValueListenableBuilder<ThemeMode>(
-                  valueListenable: themeNotifier, 
-                  builder: (context, currentMode, child) {
-                    final isDarkMode = currentMode == ThemeMode.dark;
-                    
-                    return SwitchListTile(
-                      title: const Text('Modo Escuro'),
-                      secondary: Icon(
-                        isDarkMode ? Icons.dark_mode : Icons.light_mode, 
-                        color: isDarkMode ? Colors.yellow : Colors.orange
-                      ),
-                      value: isDarkMode,
-                      activeColor: Colors.green,
-                      onChanged: (bool value) {
-
-                        themeNotifier.value = value ? ThemeMode.dark : ThemeMode.light;
-                        
-                        SharedPreferences.getInstance().then((prefs) {
-                          prefs.setBool('isDark', value);
-                        });
-                      },
-                    );
-                  },
-                ),
+                CircleAvatar(radius: 50, backgroundColor: Colors.green.withValues(alpha:0.15), child: Text(_nomeUsuario.isNotEmpty ? _nomeUsuario[0].toUpperCase() : 'U', style: const TextStyle(fontSize: 40, color: Colors.green, fontWeight: FontWeight.bold))),
+                const SizedBox(height: 16),
+                Text(_nomeUsuario, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+                Text(_emailUsuario, style: TextStyle(fontSize: 16, color: Colors.grey.shade500)),
+                const SizedBox(height: 30),
               ],
             ),
           ),
-          
-          const SizedBox(height: 24),
 
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-            child: Text('Conta', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.green)),
+          // PREFERÊNCIAS E CONTA
+          const Padding(padding: EdgeInsets.only(left: 8, bottom: 8), child: Text('PREFERÊNCIAS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2))),
+          _buildConfigCard(
+            children: [
+              ListTile(
+                leading: _buildNeutralIconContainer(Icons.palette_rounded, color: Colors.purple),
+                title: const Text('Aparência', style: TextStyle(fontWeight: FontWeight.w600)),
+                trailing: _buildAnimatedToggle(), 
+              ),
+              Divider(height: 1, color: isDark ? Colors.grey.shade800 : Colors.grey.shade200, indent: 60),
+              ListTile(
+                leading: _buildNeutralIconContainer(Icons.lock_outline, color: Colors.blue),
+                title: const Text('Alterar Senha', style: TextStyle(fontWeight: FontWeight.w600)),
+                trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+                onTap: _exibirDialogoMudarSenha,
+              ),
+            ],
           ),
-          Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: Column(
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.password),
-                  title: const Text('Mudar Senha'),
-                  trailing: const Icon(Icons.chevron_right, color: Colors.grey),
-                  onTap: _exibirDialogoMudarSenha,
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.exit_to_app),
-                  title: const Text('Sair do Aplicativo'),
-                  trailing: const Icon(Icons.chevron_right, color: Colors.grey),
-                  onTap: _fazerLogout,
-                ),
-              ],
-            ),
+
+          // ZONA DE PERIGO E SAÍDA
+          const Padding(padding: EdgeInsets.only(left: 8, bottom: 8), child: Text('ZONA DE PERIGO', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2))),
+          _buildConfigCard(
+            children: [
+              ListTile(
+                leading: _buildNeutralIconContainer(Icons.delete_forever, color: Colors.red),
+                title: const Text('Excluir minha conta', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.red)),
+                onTap: _confirmarExclusaoConta,
+              ),
+              Divider(height: 1, color: isDark ? Colors.grey.shade800 : Colors.grey.shade200, indent: 60),
+              ListTile(
+                leading: _buildNeutralIconContainer(Icons.logout), // Logout neutro
+                title: const Text('Sair do Aplicativo', style: TextStyle(fontWeight: FontWeight.w600)),
+                onTap: _fazerLogout,
+              ),
+            ],
           ),
-          
-          const SizedBox(height: 24),
-          
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-            child: Text('Zona de Perigo', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.red)),
-          ),
-          Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: ListTile(
-              leading: const Icon(Icons.delete_forever, color: Colors.red),
-              title: const Text('Excluir Minha Conta', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-              subtitle: const Text('Apaga todos os seus dados para sempre.'),
-              onTap: _excluirConta,
-            ),
-          ),
+
+          const SizedBox(height: 20),
+          Center(child: Text('MarketList v1.7.0', style: TextStyle(color: Colors.grey.shade400, fontSize: 12))),
+          const SizedBox(height: 40),
         ],
       ),
     );
