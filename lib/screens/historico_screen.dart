@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:share_plus/share_plus.dart';
 
 class HistoricoScreen extends StatefulWidget {
   final int grupoId;
@@ -15,7 +16,6 @@ class HistoricoScreen extends StatefulWidget {
 }
 
 class _HistoricoScreenState extends State<HistoricoScreen> {
-  // Controles de estado para a Rolagem Infinita
   bool _carregandoInicial = true;
   bool _carregandoMais = false;
   bool _temMaisDados = true;
@@ -23,8 +23,6 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
   int _paginaAtual = 1;
 
   Map<String, List<dynamic>> _comprasAgrupadas = {};
-  
-  // O Sensor que detecta a posição do dedo na tela
   final ScrollController _scrollController = ScrollController();
 
   @override
@@ -32,7 +30,6 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
     super.initState();
     _buscarHistorico();
     
-    // Liga o sensor de rolagem
     _scrollController.addListener(() {
       if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 50) {
         if (!_carregandoMais && _temMaisDados) {
@@ -44,7 +41,7 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
 
   @override
   void dispose() {
-    _scrollController.dispose(); // Desliga o sensor ao fechar a tela para poupar memória
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -70,7 +67,6 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
       if (response.statusCode == 200) {
         final List<dynamic> dados = jsonDecode(response.body);
         
-        // Se a API não mandou nada, significa que não tem mais compras no passado
         if (dados.isEmpty) {
           setState(() {
             _temMaisDados = false;
@@ -80,7 +76,6 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
           return;
         }
 
-        // Agrupa os itens recém-chegados
         Map<String, List<dynamic>> novosAgrupados = {};
         for (var item in dados) {
           String dataRaw = item['data_finalizacao'] ?? 'Data Desconhecida';
@@ -88,8 +83,9 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
           novosAgrupados[dataRaw]!.add(item);
         }
 
+        if (!mounted) return;
+
         setState(() {
-          // Adiciona os novos recibos aos recibos que já estavam na tela
           novosAgrupados.forEach((key, value) {
             if (_comprasAgrupadas.containsKey(key)) {
               _comprasAgrupadas[key]!.addAll(value);
@@ -102,10 +98,9 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
           _carregandoInicial = false;
           _carregandoMais = false;
         });
-      } else {
-        throw Exception('Erro na API');
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         if (!isCarregandoMais) _erro = 'Não foi possível carregar o histórico.';
         _carregandoInicial = false;
@@ -129,31 +124,53 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
     }
   }
 
+  // FUNÇÃO DE COMPARTILHAR CORRIGIDA: Agora recebe a LISTA de itens e o TOTAL
+  void _compartilharReciboWhatsApp(List<dynamic> itens, double total, String dataFormatada) {
+    String listaProdutos = "";
+    for (var item in itens) {
+      final nome = item['produto'] ?? 'Item';
+      final preco = double.tryParse(item['preco'].toString()) ?? 0.0;
+      listaProdutos += "• ${nome.toUpperCase()} - R\$ ${preco.toStringAsFixed(2)}\n";
+    }
+
+    final String reciboTexto = 
+      "🧾 *MARKETLIST S/A*\n"
+      "_Cupom Fiscal Não Oficial_\n"
+      "----------------------------------\n"
+      "📅 *Data:* $dataFormatada\n"
+      "----------------------------------\n"
+      "🛒 *PRODUTOS:*\n"
+      "$listaProdutos"
+      "\n💰 *TOTAL: R\$ ${total.toStringAsFixed(2)}*\n"
+      "----------------------------------\n"
+      "_Gerado pelo App MarketList_";
+
+    Share.share(reciboTexto);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final onBackgroundColor = theme.colorScheme.onBackground;
+    final onSurface = theme.colorScheme.onSurface;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         toolbarHeight: 80,
         elevation: 8, 
-        shadowColor: Colors.black.withOpacity(0.4), 
+        shadowColor: Colors.black.withValues(alpha: 0.4), 
         backgroundColor: Colors.green.shade600, 
         foregroundColor: Colors.white,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(
-            bottom: Radius.circular(30),
-          ),
+          borderRadius: BorderRadius.vertical(bottom: Radius.circular(30)),
         ),
         title: Text(
-          'Histórico: ${widget.nomeGrupo}', // Presumindo que sua variável chame widget.nomeGrupo
+          'Histórico: ${widget.nomeGrupo}',
           style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 0.5),
         ),
       ),
       body: _carregandoInicial
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(color: Colors.green))
           : _erro.isNotEmpty
               ? Center(child: Text(_erro, style: const TextStyle(color: Colors.red)))
               : _comprasAgrupadas.isEmpty
@@ -161,9 +178,9 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.receipt_long, size: 80, color: onBackgroundColor.withOpacity(0.3)), // Ícone adaptável
+                          Icon(Icons.receipt_long, size: 80, color: onSurface.withValues(alpha: 0.3)),
                           const SizedBox(height: 10),
-                          Text('Nenhuma compra finalizada aqui.', style: TextStyle(color: onBackgroundColor.withOpacity(0.6), fontSize: 16)), // Texto adaptável
+                          Text('Nenhuma compra finalizada aqui.', style: TextStyle(color: onSurface.withValues(alpha: 0.6), fontSize: 16)),
                         ],
                       ),
                     )
@@ -172,7 +189,6 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
                       padding: const EdgeInsets.all(16),
                       itemCount: _comprasAgrupadas.length + (_carregandoMais ? 1 : 0),
                       itemBuilder: (context, index) {
-                        
                         if (index == _comprasAgrupadas.length) {
                           return const Padding(
                             padding: EdgeInsets.symmetric(vertical: 20.0),
@@ -198,106 +214,79 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final paperColor = isDark ? const Color(0xFF1E1E1E) : const Color(0xFFFDFBF7);
     final textColor = isDark ? Colors.grey[300] : Colors.black87;
-    final mutedColor = isDark ? Colors.grey[600] : Colors.grey;
+    final mutedColor = isDark ? Colors.grey[700] : Colors.grey[300];
+    final String dataFormatada = _formatarData(data);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 24),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: paperColor,
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 5, offset: const Offset(0, 3)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 4)),
         ],
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(15),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Center(child: Text('MARKETLIST S/A', style: TextStyle(fontFamily: 'Courier', fontSize: 16, fontWeight: FontWeight.bold, color: textColor))),
-          Center(child: Text('CUPOM FISCAL NÃO OFICIAL', style: TextStyle(fontFamily: 'Courier', fontSize: 12, color: textColor))),
-          const SizedBox(height: 10),
-          Text('DATA: ${_formatarData(data)}', style: TextStyle(fontFamily: 'Courier', fontSize: 12, color: textColor)),
-          const SizedBox(height: 10),
-          Text('----------------------------------------', style: TextStyle(fontFamily: 'Courier', fontSize: 12, color: mutedColor)),
+          // CABEÇALHO COM BOTÃO DE COMPARTILHAR
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('PRODUTO', style: TextStyle(fontFamily: 'Courier', fontSize: 12, fontWeight: FontWeight.bold, color: textColor)),
-              Text('VALOR', style: TextStyle(fontFamily: 'Courier', fontSize: 12, fontWeight: FontWeight.bold, color: textColor)),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('MARKETLIST S/A', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 1, color: textColor)),
+                  const Text('CUPOM FISCAL NÃO OFICIAL', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                ],
+              ),
+              // BOTÃO DE COMPARTILHAR
+              IconButton(
+                icon: const Icon(Icons.share_outlined, color: Colors.green, size: 24),
+                onPressed: () => _compartilharReciboWhatsApp(itens, total, dataFormatada),
+              ),
             ],
           ),
-          Text('----------------------------------------', style: TextStyle(fontFamily: 'Courier', fontSize: 12, color: mutedColor)),
-          const SizedBox(height: 5),
+          const SizedBox(height: 15),
+          Text('DATA: $dataFormatada', style: TextStyle(fontSize: 12, color: textColor?.withValues(alpha: 0.7))),
+          const SizedBox(height: 10),
+          Divider(color: mutedColor, thickness: 1),
+          const SizedBox(height: 10),
           
+          // LISTA DE PRODUTOS
           ...itens.map((item) {
             String nome = item['produto'] ?? 'Item';
             double preco = double.tryParse(item['preco'].toString()) ?? 0.0;
-            if (nome.length > 20) nome = '${nome.substring(0, 20)}...'; 
-
+            
             return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2.0),
+              padding: const EdgeInsets.symmetric(vertical: 4.0),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(nome.toUpperCase(), style: TextStyle(fontFamily: 'Courier', fontSize: 12, color: textColor)),
-                  _construirPontilhado(context),
-                  Text('R\$ ${preco.toStringAsFixed(2)}', style: TextStyle(fontFamily: 'Courier', fontSize: 12, color: textColor)),
+                  Expanded(child: Text(nome.toUpperCase(), style: TextStyle(fontSize: 13, color: textColor, fontWeight: FontWeight.w500))),
+                  Text('R\$ ${preco.toStringAsFixed(2)}', style: TextStyle(fontSize: 13, color: textColor, fontWeight: FontWeight.bold)),
                 ],
               ),
             );
           }),
           
-          const SizedBox(height: 5),
-          Text('----------------------------------------', style: TextStyle(fontFamily: 'Courier', fontSize: 12, color: mutedColor)),
-          const SizedBox(height: 5),
+          const SizedBox(height: 15),
+          Divider(color: mutedColor, thickness: 1),
+          const SizedBox(height: 10),
+          
+          // TOTAL
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('TOTAL:', style: TextStyle(fontFamily: 'Courier', fontSize: 16, fontWeight: FontWeight.bold, color: textColor)),
-              Text('R\$ ${total.toStringAsFixed(2)}', style: TextStyle(fontFamily: 'Courier', fontSize: 16, fontWeight: FontWeight.bold, color: textColor)),
+              Text('TOTAL:', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: textColor)),
+              Text('R\$ ${total.toStringAsFixed(2)}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.green)),
             ],
           ),
-          const SizedBox(height: 20),
-          Center(child: Text('VOLTE SEMPRE!', style: TextStyle(fontFamily: 'Courier', fontSize: 12, color: textColor))),
-          Center(child: Text('***', style: TextStyle(fontFamily: 'Courier', fontSize: 12, color: textColor))),
+          
+          const SizedBox(height: 25),
+          Center(child: Text('VOLTE SEMPRE!', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.withValues(alpha: 0.5)))),
         ],
       ),
     );
   }
-
-  Widget _construirPontilhado(BuildContext context) {
-    // Se for modo escuro os pontinhos ficam mais escuros
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final dotColor = isDark ? Colors.grey[700] : Colors.grey[400];
-
-    return Expanded(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final boxWidth = constraints.constrainWidth();
-          const dashWidth = 2.0; 
-          const dashSpace = 4.0; 
-          final dashCount = (boxWidth / (dashWidth + dashSpace)).floor();
-
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 3.0, left: 4.0, right: 4.0),
-            child: Flex(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              direction: Axis.horizontal,
-              children: List.generate(dashCount, (_) {
-                return Container(
-                  width: dashWidth,
-                  height: 2.0,
-                  decoration: BoxDecoration(
-                    color: dotColor,
-                    shape: BoxShape.circle,
-                  ),
-                );
-              }),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
 }
