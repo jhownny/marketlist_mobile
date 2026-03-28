@@ -18,7 +18,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _erro = '';
   
   double _totalGastoMes = 0.0;
-  String _mesReferencia = '';
   List<dynamic> _gastosPorGrupo = [];
   List<dynamic> _periodosDisponiveis = [];
 
@@ -74,7 +73,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final dados = jsonDecode(response.body);
         setState(() {
           _totalGastoMes = double.tryParse(dados['total_gasto_mes'].toString()) ?? 0.0;
-          _mesReferencia = dados['mes_referencia'] ?? '';
           _gastosPorGrupo = dados['grafico_pizza'] is List ? dados['grafico_pizza'] : [];
           _periodosDisponiveis = dados['periodos_disponiveis'] is List ? dados['periodos_disponiveis'] : [];
           _carregando = false;
