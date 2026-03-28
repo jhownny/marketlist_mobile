@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'login_screen.dart';
@@ -8,7 +9,7 @@ import 'login_screen.dart';
 import '../main.dart'; 
 
 class ConfiguracoesScreen extends StatefulWidget {
-  const ConfiguracoesScreen({Key? key}) : super(key: key);
+  const ConfiguracoesScreen({super.key});
 
   @override
   State<ConfiguracoesScreen> createState() => _ConfiguracoesScreenState();
@@ -74,6 +75,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen> {
         Uri.parse('$baseUrl/conta'),
         headers: {'x-api-key': dotenv.env['API_KEY'] ?? '', 'Authorization': 'Bearer $tokenJwt'},
       );
+      if (!mounted) return; 
 
       Navigator.pop(context);
       if (response.statusCode == 200) {
@@ -135,7 +137,37 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen> {
   }
 
   Future<void> _mudarSenhaNaApi(String atual, String nova) async {
-    // Lógica mantida
+    if (atual.isEmpty || nova.isEmpty) return;
+    
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final baseUrl = dotenv.env['API_URL'] ?? '';
+      final tokenJwt = prefs.getString('jwt_token') ?? '';
+
+      final response = await http.put(
+        Uri.parse('$baseUrl/mudar_senha'),
+        headers: {
+          'Content-Type': 'application/json', 
+          'x-api-key': dotenv.env['API_KEY'] ?? '', 
+          'Authorization': 'Bearer $tokenJwt'
+        },
+        body: jsonEncode({"senha_atual": atual, "nova_senha": nova}),
+      );
+
+      // O famoso guarda-costas! Evita o aviso amarelo e protege o app de fechar sozinho
+      if (!mounted) return;
+
+      final dados = jsonDecode(response.body);
+      
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(dados['status'] ?? 'Senha alterada!'), backgroundColor: Colors.green));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(dados['erro'] ?? 'Erro ao alterar senha'), backgroundColor: Colors.red));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sem conexão com o servidor.'), backgroundColor: Colors.red));
+    }
   }
 
   // ==========================================
@@ -147,24 +179,24 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen> {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(Theme.of(context).brightness == Brightness.dark ? 0.2 : 0.05), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:Theme.of(context).brightness == Brightness.dark ? 0.2 : 0.05), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Column(children: children),
     );
   }
 
   Widget _buildNeutralIconContainer(IconData icon, {Color? color}) {
-    final onBackgroundColor = Theme.of(context).colorScheme.onBackground;
+    final onBackgroundColor = Theme.of(context).colorScheme.onSurface;
     
     return Container(
       width: 42,  // Largura fixa exata
       height: 42, // Altura fixa exata
       decoration: BoxDecoration(
-        color: onBackgroundColor.withOpacity(0.06),
+        color: onBackgroundColor.withValues(alpha:0.06),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Center(
-        child: Icon(icon, color: color ?? onBackgroundColor.withOpacity(0.7), size: 22),
+        child: Icon(icon, color: color ?? onBackgroundColor.withValues(alpha:0.7), size: 22),
       ),
     );
   }
@@ -193,7 +225,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen> {
           color: _isDarkMode ? Colors.indigo.shade900 : Colors.lightBlue.shade300,
           boxShadow: [
             BoxShadow(
-              color: (_isDarkMode ? Colors.indigo : Colors.lightBlue).withOpacity(0.4),
+              color: (_isDarkMode ? Colors.indigo : Colors.lightBlue).withValues(alpha:0.4),
               blurRadius: 10,
               offset: const Offset(0, 4),
             )
@@ -230,7 +262,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen> {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(title: const Text('Configurações', style: TextStyle(fontWeight: FontWeight.bold)), backgroundColor: Colors.transparent, elevation: 0, foregroundColor: theme.colorScheme.onBackground, centerTitle: true),
+      appBar: AppBar(title: const Text('Configurações', style: TextStyle(fontWeight: FontWeight.bold)), backgroundColor: Colors.transparent, elevation: 0, foregroundColor: theme.colorScheme.onSurface, centerTitle: true),
       body: ListView(
         padding: const EdgeInsets.all(20.0),
         children: [
@@ -238,7 +270,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen> {
           Center(
             child: Column(
               children: [
-                CircleAvatar(radius: 50, backgroundColor: Colors.green.withOpacity(0.15), child: Text(_nomeUsuario.isNotEmpty ? _nomeUsuario[0].toUpperCase() : 'U', style: const TextStyle(fontSize: 40, color: Colors.green, fontWeight: FontWeight.bold))),
+                CircleAvatar(radius: 50, backgroundColor: Colors.green.withValues(alpha:0.15), child: Text(_nomeUsuario.isNotEmpty ? _nomeUsuario[0].toUpperCase() : 'U', style: const TextStyle(fontSize: 40, color: Colors.green, fontWeight: FontWeight.bold))),
                 const SizedBox(height: 16),
                 Text(_nomeUsuario, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
                 Text(_emailUsuario, style: TextStyle(fontSize: 16, color: Colors.grey.shade500)),
