@@ -32,16 +32,18 @@ O **MarketList Mobile** é a interface oficial e principal do ecossistema Market
 O objetivo é oferecer uma experiência nativa, rápida e fluida, mantendo a integridade dos dados através de uma API RESTful segura em PHP.
 
 ---
-<!--
-## 📸 Screenshots
 
-<div align="center">
-  <img src="" alt="" height="400">
-  <img src="" alt="" height="400">
-</div>
+### 📸 Interface do Usuário
+
+| Autenticação & Início | Gestão & Dashboard | Histórico & Ajustes |
+| :---: | :---: | :---: |
+| <img src="./assets/telaLogin.jpg" width="200"> | <img src="./assets/telaDashboard.jpg" width="200"> | <img src="./assets/telaCupom.jpg" width="200"> |
+| *Login seguro e intuitivo* | *Gráficos de gastos em tempo real* | *Recibos e histórico detalhado* |
+| <img src="./assets/telaPincipal.jpg" width="200"> | <img src="./assets/telaPrincipalOrcamento.jpg" width="200"> | <img src="./assets/telaConfiguracao.jpg" width="200"> |
+| *Lista de compras limpa* | *Controle de orçamento ativo* | *Configurações e LGPD* |
 
 ---
--->
+
 <div id="funcionalidades"></div>
 
 ## 🚀 Funcionalidades
