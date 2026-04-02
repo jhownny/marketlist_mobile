@@ -189,6 +189,50 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
     buscarItens(); 
   }
 
+  Future<void> _gerarCodigoConvite(int idGrupo) async {
+    try {
+      final baseUrl = dotenv.env['API_URL'] ?? '';
+      final response = await http.post(
+        Uri.parse('$baseUrl/gerar_convite'),
+        headers: _headersAuth(),
+        body: jsonEncode({"grupo_id": idGrupo}),
+      );
+
+      final dados = jsonDecode(response.body);
+      
+      if (response.statusCode == 200) {
+        _exibirDialogoCodigoGerado(dados['codigo']);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(dados['erro'] ?? 'Erro ao gerar convite'), backgroundColor: Colors.red));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erro de conexão.'), backgroundColor: Colors.red));
+    }
+  }
+
+  Future<void> _entrarEmGrupoComCodigo(String codigo) async {
+    if (codigo.isEmpty) return;
+    try {
+      final baseUrl = dotenv.env['API_URL'] ?? '';
+      final response = await http.post(
+        Uri.parse('$baseUrl/entrar_grupo'),
+        headers: _headersAuth(),
+        body: jsonEncode({"codigo": codigo.toUpperCase()}),
+      );
+
+      final dados = jsonDecode(response.body);
+      
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(dados['mensagem']), backgroundColor: Colors.green));
+        _buscarGruposDaApi(); // Recarrega a lista lateral de grupos para mostrar o novo!
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(dados['erro'] ?? 'Erro ao entrar'), backgroundColor: Colors.orange));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erro de conexão.'), backgroundColor: Colors.red));
+    }
+  }
+
   // ==========================================================
   // FUNÇÕES PARA CRIAR NOVO GRUPO
   // ==========================================================
@@ -334,6 +378,15 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
               onTap: () {
                 Navigator.pop(context);
                 _exibirDialogoEditarGrupo(idGrupo, nomeAtual, orcamentoAtual); // Passa o orçamento para o diálogo
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.share, color: Colors.green),
+              title: const Text('Compartilhar Grupo'),
+              subtitle: const Text('Gerar código de convite'),
+              onTap: () {
+                Navigator.pop(context);
+                _gerarCodigoConvite(idGrupo);
               },
             ),
             ListTile(
@@ -841,6 +894,59 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
     );
   }
 
+  void _exibirDialogoCodigoGerado(String codigo) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Convite Gerado!', textAlign: TextAlign.center),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Passe este código para quem vai dividir o grupo com você:', textAlign: TextAlign.center),
+            const SizedBox(height: 15),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              decoration: BoxDecoration(color: Colors.green.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.green)),
+              child: SelectableText(
+                codigo, // Permite o usuário segurar o dedo para copiar
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 2.0, color: Colors.green),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Fechar')),
+        ],
+      ),
+    );
+  }
+
+  void _exibirDialogoEntrarGrupo() {
+    final codigoController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Entrar em um Grupo'),
+        content: TextField(
+          controller: codigoController,
+          textCapitalization: TextCapitalization.characters,
+          decoration: const InputDecoration(labelText: 'Código do Convite (ex: MKT-1234)', prefixIcon: Icon(Icons.group_add)),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _entrarEmGrupoComCodigo(codigoController.text.trim());
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+            child: const Text('Entrar'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildEmptyState(String nomeGrupo, ThemeData theme) {
     final onBackgroundColor = theme.colorScheme.onBackground;
     final surfaceColor = theme.colorScheme.surface;
@@ -1186,6 +1292,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                       },
                       icon: const Icon(Icons.add_circle_outline),
                       label: const Text('Criar Novo Grupo', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.green,
                         side: BorderSide(color: Colors.green.shade300, width: 2),
@@ -1195,6 +1302,14 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                     ),
                     const SizedBox(height: 12),
                     
+                    ListTile(
+                      leading: const Icon(Icons.group_add, color: Colors.blue),
+                      title: const Text('Entrar via Código', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+                      onTap: () {
+                        Navigator.pop(context); // Fecha o menu
+                        _exibirDialogoEntrarGrupo();
+                      },
+                    ),
                     // Dashboard
                     ListTile(
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
