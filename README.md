@@ -61,11 +61,9 @@ O objetivo é oferecer uma experiência nativa, rápida e fluida, mantendo a int
 - [x] **Orçamento por Lista:** Definir um limite de gastos para o grupo e acompanhar o saldo (positivo ou negativo) em tempo real.
 - [x] **Compartilhamento de Recibo:** Exportar o comprovante de compras finalizadas para envio via WhatsApp e outros apps.
 - [x] **Dashboard Financeiro:** Aba de estatísticas com gráficos visuais detalhando os gastos totais do usuário por mês e por grupos de compras.
-      
-### ⏳ Metas Futuras (Roadmap)
+- [x] **Listas Compartilhadas:** Permitir que contas diferentes gerenciem e editem o mesmo grupo de compras de forma colaborativa.
 
-- [ ] **Listas Compartilhadas:** Permitir que contas diferentes gerenciem e editem o mesmo grupo de compras de forma colaborativa.
-
+<!--### ⏳ Metas Futuras (Roadmap)-->
       
 ---
 <div id="tecnologias"></div>
