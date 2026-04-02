@@ -18,6 +18,19 @@ class ListaComprasScreen extends StatefulWidget {
 }
 
 class _ListaComprasScreenState extends State<ListaComprasScreen> {
+
+  // Mapeamento das strings do banco para os ícones do Flutter
+  final Map<String, IconData> _iconesDisponiveis = {
+    'shopping_cart': Icons.shopping_cart,
+    'shopping_basket': Icons.shopping_basket,
+    'restaurant': Icons.restaurant,
+    'local_pizza': Icons.local_pizza,
+    'kebab_dining': Icons.kebab_dining,
+    'local_pharmacy': Icons.local_pharmacy,
+    'home': Icons.home,
+    'pets': Icons.pets,
+  };
+
   List<dynamic> _itens = [];
   List<dynamic> _listaGruposApi = []; 
   
@@ -181,45 +194,80 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
   // ==========================================================
   void _exibirDialogoNovoGrupo() {
     final nomeController = TextEditingController();
-    final orcamentoController = TextEditingController(); // Novo controlador
+    final orcamentoController = TextEditingController();
+    String iconeSelecionado = 'shopping_cart'; // Ícone padrão
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Novo Grupo de Compras'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nomeController,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(labelText: 'Nome do Grupo', prefixIcon: Icon(Icons.shopping_bag)),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Novo Grupo de Compras'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: nomeController,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(labelText: 'Nome do Grupo', prefixIcon: Icon(Icons.shopping_bag)),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: orcamentoController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Orçamento (Opcional)', prefixText: 'R\$ ', prefixIcon: Icon(Icons.account_balance_wallet)),
+                ),
+                const SizedBox(height: 20),
+                const Text('Ícone do Grupo:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: _iconesDisponiveis.entries.map((entry) {
+                    bool isSelected = iconeSelecionado == entry.key;
+                    return GestureDetector(
+                      onTap: () => setDialogState(() => iconeSelecionado = entry.key),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 250), // Tempo da animação
+                        curve: Curves.easeInOut, // Curva suave de entrada e saída
+                        width: 50,  
+                        height: 50,         
+                        decoration: BoxDecoration(
+                          color: isSelected ? Colors.green.withValues(alpha: 0.2) : Colors.transparent,
+                          // Deixei a borda sempre com width 2, mas transparente quando não selecionado para evitar pulos
+                          border: Border.all(
+                            color: isSelected ? Colors.green : Colors.grey.withValues(alpha: 0.3), 
+                            width: 2 
+                          ),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(entry.value, color: isSelected ? Colors.green : Colors.grey),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
             ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: orcamentoController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Orçamento (Opcional)', prefixText: 'R\$ ', prefixIcon: Icon(Icons.account_balance_wallet)),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                double orcamento = double.tryParse(orcamentoController.text.replaceAll(',', '.')) ?? 0.0;
+                _criarNovoGrupoNaApi(nomeController.text.trim(), orcamento, iconeSelecionado);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+              child: const Text('Criar'),
             ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              double orcamento = double.tryParse(orcamentoController.text.replaceAll(',', '.')) ?? 0.0;
-              _criarNovoGrupoNaApi(nomeController.text.trim(), orcamento);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
-            child: const Text('Criar'),
-          ),
-        ],
       ),
     );
   }
 
-  Future<void> _criarNovoGrupoNaApi(String nome, double orcamento) async {
+  Future<void> _criarNovoGrupoNaApi(String nome, double orcamento, String icone) async {
     if (nome.isEmpty) return;
 
     setState(() => _carregando = true);
@@ -229,21 +277,22 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
       
       final response = await http.post(
         Uri.parse('$baseUrl/grupos'),
-        headers: _headersAuth(), // Envia o crachá JWT de segurança!
+        headers: _headersAuth(),
         body: jsonEncode({
           "nome": nome,
-          "icone": "shopping_cart" // Ícone padrão para novos grupos
+          "icone": icone, // Envia o ícone selecionado
+          "orcamento": orcamento
         }),
       ).timeout(const Duration(seconds: 10));
+
+      if (!mounted) return;
 
       if (response.statusCode == 201) {
         final dados = jsonDecode(response.body);
         final novoId = int.tryParse(dados['id'].toString()) ?? 0;
 
-        // Atualiza a lista de grupos do menu lateral
         await _buscarGruposDaApi();
 
-        // Muda automaticamente a tela para o grupo que acabou de ser criado
         if (novoId > 0) {
           _trocarGrupo(novoId, nome, orcamento);
         }
@@ -255,6 +304,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
         throw Exception('Erro da API');
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Erro ao criar grupo. Verifique a conexão.'), backgroundColor: Colors.red),
       );
@@ -265,7 +315,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
   // ==========================================================
   // FUNÇÕES PARA EDITAR E DELETAR GRUPOS
   // ==========================================================
-  void _exibirOpcoesGrupo(int idGrupo, String nomeAtual) {
+  void _exibirOpcoesGrupo(int idGrupo, String nomeAtual, double orcamentoAtual) {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
@@ -279,10 +329,11 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.edit, color: Colors.blue),
-              title: const Text('Editar Nome'),
+              title: const Text('Editar Grupo'), // Mudamos o título
+              subtitle: const Text('Alterar nome ou orçamento'), // Adicionamos subtítulo
               onTap: () {
-                Navigator.pop(context); // Fecha o menu inferior
-                _exibirDialogoEditarGrupo(idGrupo, nomeAtual);
+                Navigator.pop(context);
+                _exibirDialogoEditarGrupo(idGrupo, nomeAtual, orcamentoAtual); // Passa o orçamento para o diálogo
               },
             ),
             ListTile(
@@ -290,7 +341,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
               title: const Text('Excluir Grupo'),
               subtitle: const Text('Isso apagará todos os itens dentro dele!'),
               onTap: () {
-                Navigator.pop(context); // Fecha o menu inferior
+                Navigator.pop(context); 
                 _confirmarExclusaoGrupo(idGrupo, nomeAtual);
               },
             ),
@@ -301,10 +352,11 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
     );
   }
 
-  void _exibirDialogoEditarGrupo(int idGrupo, String nomeAtual) {
+  void _exibirDialogoEditarGrupo(int idGrupo, String nomeAtual, double orcamentoAtual) {
     final nomeController = TextEditingController(text: nomeAtual);
+    // Ele preenche o campo com o orçamento exato do grupo clicado
     final orcamentoController = TextEditingController(
-      text: _orcamentoAtual > 0 ? _orcamentoAtual.toStringAsFixed(2) : ''
+      text: orcamentoAtual > 0 ? orcamentoAtual.toStringAsFixed(2) : ''
     );
 
     showDialog(
@@ -317,9 +369,9 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
             TextField(
               controller: nomeController,
               textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(labelText: 'Novo nome'),
+              decoration: const InputDecoration(labelText: 'Nome do grupo', prefixIcon: Icon(Icons.edit)),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 15),
             TextField(
               controller: orcamentoController,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -333,7 +385,6 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
             onPressed: () {
               Navigator.pop(context);
               double orc = double.tryParse(orcamentoController.text.replaceAll(',', '.')) ?? 0.0;
-              // Passa o orçamento para a API
               _editarGrupoNaApi(idGrupo, nomeController.text.trim(), orc); 
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
@@ -1086,7 +1137,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                         child: ListTile(
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                           leading: Icon(
-                            isSelected ? Icons.folder : Icons.folder_outlined,
+                            _iconesDisponiveis[grupo['icone']] ?? Icons.folder, // Busca no mapa ou usa pasta como fallback
                             color: isSelected ? Colors.green : Colors.grey.shade600,
                           ),
                           title: Text(
@@ -1100,7 +1151,9 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                             icon: Icon(Icons.more_vert, size: 20, color: isSelected ? Colors.green.shade700 : Colors.grey.shade400),
                             onPressed: () {
                               Navigator.pop(context);
-                              _exibirOpcoesGrupo(idGrupo, grupo['nome']);
+                              // Pegamos o orçamento correto daquele item da lista!
+                              double orcamentoDoItem = double.tryParse(grupo['orcamento']?.toString() ?? '0') ?? 0.0;
+                              _exibirOpcoesGrupo(idGrupo, grupo['nome'], orcamentoDoItem);
                             },
                           ),
                           onTap: () {

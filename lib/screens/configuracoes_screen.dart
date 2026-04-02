@@ -5,7 +5,6 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'login_screen.dart';
 
-// 1. IMPORTAÇÃO PARA PEGAR O TEMA GLOBAL (MAIN)
 import '../main.dart'; 
 
 class ConfiguracoesScreen extends StatefulWidget {
@@ -32,7 +31,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen> {
       _nomeUsuario = prefs.getString('usuario_nome') ?? 'Usuário';
       _emailUsuario = prefs.getString('usuario_email') ?? 'marketlist@app.com';
       
-      // 2. LÊ O ESTADO ATUAL DIRETO DO NOSSO AVISADOR GLOBAL
       _isDarkMode = themeNotifier.value == ThemeMode.dark; 
     });
   }
@@ -154,7 +152,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen> {
         body: jsonEncode({"senha_atual": atual, "nova_senha": nova}),
       );
 
-      // O famoso guarda-costas! Evita o aviso amarelo e protege o app de fechar sozinho
       if (!mounted) return;
 
       final dados = jsonDecode(response.body);
@@ -189,8 +186,8 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen> {
     final onBackgroundColor = Theme.of(context).colorScheme.onSurface;
     
     return Container(
-      width: 42,  // Largura fixa exata
-      height: 42, // Altura fixa exata
+      width: 42,  
+      height: 42, 
       decoration: BoxDecoration(
         color: onBackgroundColor.withValues(alpha:0.06),
         borderRadius: BorderRadius.circular(12),
@@ -317,7 +314,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen> {
           ),
 
           const SizedBox(height: 20),
-          Center(child: Text('MarketList v1.7.0', style: TextStyle(color: Colors.grey.shade400, fontSize: 12))),
+          Center(child: Text('MarketList v1.8.0', style: TextStyle(color: Colors.grey.shade400, fontSize: 12))),
           const SizedBox(height: 40),
         ],
       ),
