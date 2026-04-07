@@ -4,12 +4,17 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
+//import 'package:url_launcher/url_launcher.dart';
 import 'login_screen.dart';
 import 'historico_screen.dart';
 import 'configuracoes_screen.dart';
 import 'dashboard_screen.dart';
 import 'financas_screen.dart';
+import 'package:dio/dio.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'dart:io';
 
 class ListaComprasScreen extends StatefulWidget {
   const ListaComprasScreen({super.key});
@@ -83,35 +88,89 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
   }
 
   void _mostrarAlertaAtualizacao(String versao, String url) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [Icon(Icons.system_update, color: Colors.green), SizedBox(width: 10), Text('Nova Versão!')],
-        ),
-        content: Text('A versão $versao do MarketList acabou de sair.\nDeseja baixar a atualização agora?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Depois', style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              final uri = Uri.parse(url);
-              try {
-                await launchUrl(uri, mode: LaunchMode.externalApplication);
-              } catch (e) {
-                debugPrint("Erro ao abrir navegador: $e");
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
-            child: const Text('Atualizar'),
-          ),
-        ],
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: const Row(
+        children: [Icon(Icons.system_update, color: Colors.green), SizedBox(width: 10), Text('Nova Versão!')],
       ),
+      content: Text('A versão $versao está pronta.\nDeseja baixar e instalar agora?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Depois', style: TextStyle(color: Colors.grey)),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.pop(context);
+            _iniciarDownloadEInstalacao(url, versao);
+          },
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+          child: const Text('Atualizar Agora'),
+        ),
+      ],
+    ),
+  );
+  }
+
+  Future<void> _iniciarDownloadEInstalacao(String url, String versao) async {
+  //Pedir permissão para instalar apps
+  var status = await Permission.requestInstallPackages.request();
+  if (!status.isGranted) {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Permissão necessária para atualizar.')));
+    return;
+  }
+
+  //Preparar o diálogo de progresso
+  double progresso = 0;
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text("Baixando Atualização..."),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            LinearProgressIndicator(value: progresso, backgroundColor: Colors.grey[200], color: Colors.green),
+            const SizedBox(height: 10),
+            Text("${(progresso * 100).toStringAsFixed(0)}%"),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  try {
+    //Definir onde o arquivo será salvo temporariamente
+    Directory tempDir = await getTemporaryDirectory();
+    String pathCompleto = "${tempDir.path}/marketlist_$versao.apk";
+
+    //Iniciar o download com Dio
+    Dio dio = Dio();
+    await dio.download(
+      url,
+      pathCompleto,
+      onReceiveProgress: (recebido, total) {
+        if (total != -1) {
+          progresso = recebido / total;
+          (context as Element).markNeedsBuild(); 
+        }
+      },
     );
+
+    //Fechar o diálogo de progresso e Abrir o instalador
+    Navigator.pop(context);
+    await OpenFilex.open(pathCompleto);
+
+  } catch (e) {
+    Navigator.pop(context);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao baixar: $e'), backgroundColor: Colors.red));
+  }
+  
   }
 
   Future<void> _carregarUsuarioLocal() async {
