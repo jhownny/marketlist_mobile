@@ -9,6 +9,7 @@ import 'login_screen.dart';
 import 'historico_screen.dart';
 import 'configuracoes_screen.dart';
 import 'dashboard_screen.dart';
+import 'financas_screen.dart';
 
 class ListaComprasScreen extends StatefulWidget {
   const ListaComprasScreen({super.key});
@@ -44,6 +45,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
   int _grupoId = 0; 
   String _nomeGrupoAtual = 'Carregando...';
   double _orcamentoAtual = 0.0;
+  double _opacidadeFab = 0.4;
 
   @override
   void initState() {
@@ -184,7 +186,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
     setState(() {
       _grupoId = novoId;
       _nomeGrupoAtual = nome;
-      _orcamentoAtual = orcamento; // Atualiza o orçamento atual
+      _orcamentoAtual = orcamento;
     });
     buscarItens(); 
   }
@@ -224,7 +226,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
       
       if (response.statusCode == 200) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(dados['mensagem']), backgroundColor: Colors.green));
-        _buscarGruposDaApi(); // Recarrega a lista lateral de grupos para mostrar o novo!
+        _buscarGruposDaApi();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(dados['erro'] ?? 'Erro ao entrar'), backgroundColor: Colors.orange));
       }
@@ -786,12 +788,78 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
       );
       if (response.statusCode == 200) {
         final res = jsonDecode(response.body);
+        
         showDialog(
           context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('🛒 Lista Finalizada!', style: TextStyle(color: Colors.green)),
-            content: Text('📦 Itens fechados: ${res['itens_fechados']}'),
-            actions: [ElevatedButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
+          builder: (context) => Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            elevation: 10,
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0.0, end: 1.0),
+                    duration: const Duration(milliseconds: 700),
+                    curve: Curves.elasticOut,
+                    builder: (context, scale, child) {
+                      return Transform.scale(
+                        scale: scale,
+                        child: child,
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.check_circle_rounded, size: 64, color: Colors.green),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  
+                  // Textos Limpos e Modernos
+                  Text(
+                    'Lista Finalizada!',
+                    style: TextStyle(
+                      fontSize: 22, 
+                      fontWeight: FontWeight.w900,
+                      color: Theme.of(context).colorScheme.onBackground
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Todos os itens pendentes foram processados.\nVocê fechou ${res['itens_fechados']} itens.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 15, 
+                      color: Colors.grey.shade500,
+                      height: 1.3
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  
+                  // Botão Largo e Elegante
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        elevation: 0,
+                      ),
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Excelente', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         );
         buscarItens();
@@ -1032,7 +1100,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
         Expanded(
           child: ListView.builder(
             itemCount: _itens.length,
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.only(left: 8, right: 8, top: 8, bottom: 100), 
             itemBuilder: (context, index) {
               final item = _itens[index];
               final nomeProduto = item['produto'] ?? 'Produto sem nome';
@@ -1123,7 +1191,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 80,
-        elevation: 8, // Sombra suave
+        elevation: 8,
         shadowColor: Colors.black.withOpacity(0.4), 
         backgroundColor: Colors.green.shade600,
         foregroundColor: Colors.white,
@@ -1227,7 +1295,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
               child: _listaGruposApi.isEmpty 
                 ? Center(child: Text('Nenhum grupo encontrado.', style: TextStyle(color: Colors.grey.shade500)))
                 : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    padding: const EdgeInsets.only(bottom: 20), 
                     itemCount: _listaGruposApi.length,
                     itemBuilder: (context, index) {
                       final grupo = _listaGruposApi[index];
@@ -1306,8 +1374,21 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                       leading: const Icon(Icons.group_add, color: Colors.blue),
                       title: const Text('Entrar via Código', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
                       onTap: () {
-                        Navigator.pop(context); // Fecha o menu
+                        Navigator.pop(context);
                         _exibirDialogoEntrarGrupo();
+                      },
+                    ),
+
+                    const Divider(),
+                    ListTile(
+                      leading: const Icon(Icons.account_balance_wallet, color: Colors.blue),
+                      title: const Text('Finanças Mensais', style: TextStyle(fontWeight: FontWeight.bold)),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const FinancasScreen()),
+                        );
                       },
                     ),
                     // Dashboard
@@ -1339,10 +1420,22 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
         ),
       ),
       body: _buildBody(),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _exibirDialogoAdicionar,
-        backgroundColor: Colors.green,
-        child: const Icon(Icons.add, color: Colors.white),
+      floatingActionButton: Listener(
+        onPointerDown: (_) => setState(() => _opacidadeFab = 1.0),
+        onPointerUp: (_) => setState(() => _opacidadeFab = 0.4),
+        child: AnimatedOpacity(
+          opacity: _opacidadeFab,
+          duration: const Duration(milliseconds: 200),
+          child: FloatingActionButton(
+           onPressed: () {
+              setState(() => _opacidadeFab = 0.4); 
+              _exibirDialogoAdicionar();
+            },
+            backgroundColor: Colors.green, 
+            foregroundColor: Colors.white,
+            child: const Icon(Icons.add),
+          ),
+        ),
       ),
       bottomNavigationBar: temItensPendentes && !_carregando
           ? SafeArea(
