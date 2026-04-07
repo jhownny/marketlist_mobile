@@ -321,7 +321,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen> {
           ),
 
           const SizedBox(height: 20),
-          Center(child: Text('MarketList v2.0.1', style: TextStyle(color: Colors.grey.shade400, fontSize: 12))),
+          Center(child: Text('MarketList v2.1.0', style: TextStyle(color: Colors.grey.shade400, fontSize: 12))),
           const SizedBox(height: 40),
         ],
       ),
