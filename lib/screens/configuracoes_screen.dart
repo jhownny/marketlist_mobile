@@ -197,17 +197,24 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen> {
       ),
     );
   }
+
+  
   // ==========================================
-  // O NOSSO NOVO BOTÃO ANIMADO SOL/LUA (CORREÇÃO LENTIDÃO)
+  // O NOSSO NOVO BOTÃO ANIMADO SOL/LUA (CORRIGIDO)
   // ==========================================
   Widget _buildAnimatedToggle() {
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
+        // 1. Altera a variável da tela atual
         setState(() {
           _isDarkMode = !_isDarkMode;
         });
         
+        // 2. Salva a nova escolha na memória física (disco)
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('isDarkMode', _isDarkMode);
 
+        // 3. Aplica o tema na aplicação inteira (themeNotifier)
         Future.delayed(const Duration(milliseconds: 250), () {
           themeNotifier.value = _isDarkMode ? ThemeMode.dark : ThemeMode.light;
         });
@@ -222,7 +229,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen> {
           color: _isDarkMode ? Colors.indigo.shade900 : Colors.lightBlue.shade300,
           boxShadow: [
             BoxShadow(
-              color: (_isDarkMode ? Colors.indigo : Colors.lightBlue).withValues(alpha:0.4),
+              color: (_isDarkMode ? Colors.indigo : Colors.lightBlue).withValues(alpha: 0.4),
               blurRadius: 10,
               offset: const Offset(0, 4),
             )
