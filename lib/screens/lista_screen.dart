@@ -116,62 +116,72 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
   );
   }
 
-  Future<void> _iniciarDownloadEInstalacao(String url, String versao) async {
-  //Pedir permissão para instalar apps
-  var status = await Permission.requestInstallPackages.request();
-  if (!status.isGranted) {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Permissão necessária para atualizar.')));
-    return;
-  }
+ Future<void> _iniciarDownloadEInstalacao(String url, String versao) async {
+    // 1. Pedir permissão
+    var status = await Permission.requestInstallPackages.request();
+    if (!status.isGranted) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Permissão necessária para atualizar.')));
+      return;
+    }
 
-  //Preparar o diálogo de progresso
-  double progresso = 0;
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => AlertDialog(
+    // 2. CRIANDO O "RÁDIO TRANSMISSOR" DE PROGRESSO
+    // Ele começa em 0.0 e vai avisar a tela sempre que o valor mudar
+    final ValueNotifier<double> progressoNotifier = ValueNotifier(0.0);
+
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text("Baixando Atualização..."),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            LinearProgressIndicator(value: progresso, backgroundColor: Colors.grey[200], color: Colors.green),
-            const SizedBox(height: 10),
-            Text("${(progresso * 100).toStringAsFixed(0)}%"),
-          ],
+        
+        // 3. O OUVINTE: Essa caixinha só redesenha a barra e o texto quando o rádio avisa
+        content: ValueListenableBuilder<double>(
+          valueListenable: progressoNotifier,
+          builder: (context, progresso, child) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                LinearProgressIndicator(value: progresso, backgroundColor: Colors.grey[200], color: Colors.green),
+                const SizedBox(height: 10),
+                Text("${(progresso * 100).toStringAsFixed(0)}%", style: const TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            );
+          },
         ),
       ),
-    ),
-  );
-
-  try {
-    //Definir onde o arquivo será salvo temporariamente
-    Directory tempDir = await getTemporaryDirectory();
-    String pathCompleto = "${tempDir.path}/marketlist_$versao.apk";
-
-    //Iniciar o download com Dio
-    Dio dio = Dio();
-    await dio.download(
-      url,
-      pathCompleto,
-      onReceiveProgress: (recebido, total) {
-        if (total != -1) {
-          progresso = recebido / total;
-          (context as Element).markNeedsBuild(); 
-        }
-      },
     );
 
-    //Fechar o diálogo de progresso e Abrir o instalador
-    Navigator.pop(context);
-    await OpenFilex.open(pathCompleto);
+    try {
+      Directory tempDir = await getTemporaryDirectory();
+      String pathCompleto = "${tempDir.path}/marketlist_$versao.apk";
 
-  } catch (e) {
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao baixar: $e'), backgroundColor: Colors.red));
-  }
-  
+      Dio dio = Dio();
+      await dio.download(
+        url,
+        pathCompleto,
+        onReceiveProgress: (recebido, total) {
+          if (total != -1) {
+            // 4. ATUALIZANDO O RÁDIO:
+            // Ao mudar o ".value", o ValueListenableBuilder pisca e atualiza a barra na hora!
+            progressoNotifier.value = recebido / total;
+          }
+        },
+      );
+
+      if (!mounted) return;
+      Navigator.pop(context); // Fecha o diálogo de progresso
+      
+      // Inicia a instalação
+      await OpenFilex.open(pathCompleto);
+
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context); // Fecha o diálogo em caso de erro
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao baixar: $e'), backgroundColor: Colors.red));
+    }
   }
 
   Future<void> _carregarUsuarioLocal() async {
