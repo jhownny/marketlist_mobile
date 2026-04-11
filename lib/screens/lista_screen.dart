@@ -10,6 +10,7 @@ import 'configuracoes_screen.dart';
 import 'dashboard_screen.dart';
 import 'financas_screen.dart';
 import 'barcode_scanner_screen.dart';
+import 'scanner_nota_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
@@ -1367,6 +1368,36 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                       builder: (context) => HistoricoScreen(grupoId: _grupoId, nomeGrupo: _nomeGrupoAtual),
                     ),
                   );
+                }
+              },
+            ),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 18),
+            decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
+            child: IconButton(
+              icon: const Icon(Icons.qr_code_scanner, size: 20),
+              tooltip: 'Importar Nota Fiscal',
+              onPressed: () async {
+                if (_grupoId != 0) {
+                  // Abre a câmera e espera o resultado
+                  final itensImportados = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ScannerNotaScreen(grupoId: _grupoId),
+                    ),
+                  );
+
+                  // Se a câmera retornou os itens, faz um loop salvando eles
+                  if (itensImportados != null && itensImportados is List) {
+                    setState(() => _carregando = true);
+                    for (var item in itensImportados) {
+                      // Usa a sua função já existente para salvar!
+                      await _salvarNovoItem(item['produto'], item['preco'].toString(), "1");
+                    }
+                    await buscarItens();
+                  }
                 }
               },
             ),
