@@ -4,12 +4,12 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-//import 'package:url_launcher/url_launcher.dart';
 import 'login_screen.dart';
 import 'historico_screen.dart';
 import 'configuracoes_screen.dart';
 import 'dashboard_screen.dart';
 import 'financas_screen.dart';
+import 'barcode_scanner_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
@@ -880,7 +880,6 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
                   ),
                   const SizedBox(height: 24),
                   
-                  // Textos Limpos e Modernos
                   Text(
                     'Lista Finalizada!',
                     style: TextStyle(
@@ -941,37 +940,93 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
   void _exibirDialogoAdicionar() {
     final nomeController = TextEditingController();
     final precoController = TextEditingController();
-    final qtdController = TextEditingController(text: '1'); 
+    final qtdController = TextEditingController(text: '1');
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Novo Item'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nomeController, decoration: const InputDecoration(labelText: 'Produto'), textCapitalization: TextCapitalization.sentences),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(flex: 2, child: TextField(controller: precoController, decoration: const InputDecoration(labelText: 'Preço (R\$)'), keyboardType: const TextInputType.numberWithOptions(decimal: true))),
-                const SizedBox(width: 10),
-                Expanded(flex: 1, child: TextField(controller: qtdController, decoration: const InputDecoration(labelText: 'Qtd'), keyboardType: TextInputType.number)),
-              ],
+      builder: (context) => StatefulBuilder( // Adicionei isso para a animação de texto funcionar
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Novo Item'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nomeController,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: InputDecoration(
+                  labelText: 'Produto',
+                  prefixIcon: const Icon(Icons.shopping_basket),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.barcode_reader, color: Colors.green),
+                    onPressed: () async {
+                      final String? code = await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const BarcodeScannerScreen()),
+                      );
+
+                      if (code != null && code.isNotEmpty) {
+                        setDialogState(() {
+                          nomeController.text = "Buscando...";
+                        });
+
+                        final nomeIdentificado = await _buscarNomePeloEAN(code);
+
+                        setDialogState(() {
+                          nomeController.text = nomeIdentificado;
+                        });
+
+                        // Se encontrou o nome, já pula o foco para o campo de preço.
+                        if (nomeIdentificado != "Não encontrado (digite o nome)" && 
+                            nomeIdentificado != "Erro na busca (API)") {
+                           // O Flutter pode precisar de um micro-delay para o foco funcionar
+                           Future.delayed(const Duration(milliseconds: 100), () {
+                           });
+                        }
+                      }
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: TextField(
+                      controller: precoController,
+                      decoration: const InputDecoration(labelText: 'Preço (R\$)'),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 1,
+                    child: TextField(
+                      controller: qtdController,
+                      decoration: const InputDecoration(labelText: 'Qtd'),
+                      keyboardType: TextInputType.number,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _salvarNovoItem(nomeController.text, precoController.text, qtdController.text);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+              child: const Text('Adicionar'),
             ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _salvarNovoItem(nomeController.text, precoController.text, qtdController.text);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
-            child: const Text('Adicionar'),
-          ),
-        ],
       ),
     );
   }
@@ -1072,6 +1127,28 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
         ],
       ),
     );
+  }
+
+  Future<String> _buscarNomePeloEAN(String code) async {
+    try {
+      final baseUrl = dotenv.env['API_URL'] ?? '';
+      final response = await http.get(
+        Uri.parse('$baseUrl/produtos?ean=$code'), 
+        headers: _headersAuth(),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final dados = jsonDecode(response.body);
+        return dados['nome'] ?? "Produto não identificado";
+      } else if (response.statusCode == 404) {
+        return "Não encontrado (digite o nome)";
+      } else {
+        return "Erro na busca (API)";
+      }
+    } catch (e) {
+      debugPrint("Erro na busca: $e");
+      return "Sem conexão com o servidor";
+    }
   }
 
   Widget _buildEmptyState(String nomeGrupo, ThemeData theme) {
@@ -1315,7 +1392,7 @@ class _ListaComprasScreenState extends State<ListaComprasScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. CABEÇALHO CUSTOMIZADO E MODERNO
+            // CABEÇALHO CUSTOMIZADO E MODERNO
             Container(
               padding: const EdgeInsets.fromLTRB(24, 60, 24, 24),
               width: double.infinity,
